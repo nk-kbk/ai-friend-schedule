@@ -1,4 +1,4 @@
-# config/settings.py の【禁断デバッグモード版】フルコード！
+# config/settings.py の【最終解決・完成版】フルコード！
 
 from pathlib import Path
 import os
@@ -11,29 +11,27 @@ dotenv_path = os.path.join(BASE_DIR, '.env')
 load_dotenv(dotenv_path)
 
 # --- 環境判定 ---
+# Renderのサーバー上ならTrue、ひろとくんのPCならFalseになるよ
 IS_RENDER = 'RENDER' in os.environ
 
 # --- セキュリティ設定 ---
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-YOUR-DEFAULT-KEY')
 
-# --- ✨✨ ここが禁断の魔法の改造ポイントだよ！ ✨✨ ---
-# DEBUGは、基本的にはRender上(本番)ではFalseにする
-DEBUG = False
-# でも、もし環境変数で「デバッグして！」って指示があったら、特別にDEBUGモードをONにする！
-if os.getenv('DJANGO_DEBUG') == 'True':
+# ✨✨ DEBUG設定を、元の安全な形に戻したよ！ ✨✨
+if IS_RENDER:
+    DEBUG = False
+else:
     DEBUG = True
 
-# 本番環境でのみ、ALLOWED_HOSTSを設定する
+# ALLOWED_HOSTSの設定
 ALLOWED_HOSTS = []
 if IS_RENDER:
     RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
     if RENDER_EXTERNAL_HOSTNAME:
         ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 else:
-    # 開発中はローカルホストを許可して、DEBUGモードを強制的にONにする
+    # 開発中はローカルホストを許可
     ALLOWED_HOSTS = ['localhost', '127.0.0.1']
-    DEBUG = True
-# --- ✨✨ 改造はここまで！ ---
 
 # --- アプリケーション定義 ---
 INSTALLED_APPS = [
@@ -84,15 +82,23 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# --- データベース設定 ---
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# --- ✨✨ データベース設定を、より確実な形に修正したよ！ ✨✨ ---
+if IS_RENDER:
+    # 本番環境(Render)では、DATABASE_URLを使ってPostgreSQLに接続する
+    DATABASES = {
+        'default': dj_database_url.config(
+            conn_max_age=600,
+            ssl_require=True
+        )
     }
-}
-if 'DATABASE_URL' in os.environ:
-    DATABASES['default'] = dj_database_url.config(conn_max_age=600, ssl_require=True)
+else:
+    # 開発環境(ひろとくんのPC)では、今まで通りSQLite3を使う
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 # --- パスワード検証 ---
 AUTH_PASSWORD_VALIDATORS = [

@@ -1,0 +1,355 @@
+{% extends "main_app/base.html" %}
+{% load static %}
+
+{% block title %}{% if ai_character %}{{ ai_character.character_name }}とチャット{% else %}AIチャット{% endif %}{% endblock %}
+
+{% block page_title_in_header %}
+    <div class="flex items-center gap-3 w-full">
+        {% if ai_character %}
+            {% if ai_character.icon_url %}
+                <img alt="{{ ai_character.character_name }}のアイコン" class="w-8 h-8 rounded-full object-cover" src="{{ ai_character.icon_url }}"/>
+            {% else %}
+                <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-sm font-bold text-white">{{ ai_character.character_name.0|upper }}</div>
+            {% endif %}
+            <span class="whitespace-nowrap">{{ ai_character.character_name }}</span>
+            <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+        {% else %}
+            <span>AIチャット</span>
+        {% endif %}
+
+        <div class="ml-auto">
+            <form id="resetChatForm" action="{% url 'ai_assistant_app:reset_chat_history' character_id=ai_character.id %}" method="post">
+                {% csrf_token %}
+                <button type="submit" onclick="return confirm('本当にこのAIとの会話履歴をすべてリセットしますか？')" 
+                        class="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors"
+                        aria-label="会話履歴をリセット" title="会話履歴をリセット">
+                    <span class="material-symbols-outlined text-sm">delete_history</span>
+                    <span>リセット</span>
+                </button>
+            </form>
+        </div>
+    </div>
+{% endblock %}
+
+{% block head_extra_css %}
+<style>
+    #main-content-container { padding: 0 !important; margin: 0 !important; max-width: none !important; }
+    .message-bubble-ai { background-color: #f1f5f9; color: #1e293b; }
+    .message-bubble-user { background-color: #3b82f6; color: white; }
+    @keyframes blink { 0% { opacity: 0.2; } 20% { opacity: 1; } 100% { opacity: 0.2; } }
+    .ai-typing-indicator span { animation: blink 1.4s infinite both; }
+    .ai-typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+    .ai-typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes fadeInMessage { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .message-animate-in { animation: fadeInMessage 0.3s ease-out; }
+
+    @keyframes mic-pulse {
+        0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+        70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+    .mic-recording {
+        animation: mic-pulse 1.5s infinite;
+        background-color: #ef4444;
+        color: white;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex flex-col h-[calc(100vh-4.5rem)] bg-white">
+    <main class="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50" id="messagesArea"></main>
+
+    <footer class="bg-white p-4 border-t border-slate-200">
+        <form id="chatForm" class="max-w-4xl mx-auto flex items-center gap-3">
+            <input id="messageInput" class="flex-1 px-4 py-2.5 border border-slate-300 rounded-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow text-sm text-slate-800 placeholder-slate-400" placeholder="メッセージを入力、またはマイクを押して話してください..." type="text" autocomplete="off"/>
+            
+            <button id="micButton" type="button" aria-label="Voice input" class="bg-slate-200 text-slate-600 p-2.5 rounded-full hover:bg-slate-300 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2">
+                <span class="material-symbols-outlined">mic</span>
+            </button>
+            <button id="sendButton" type="submit" aria-label="Send message" class="bg-blue-500 text-white p-2.5 rounded-full hover:bg-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                <span class="material-symbols-outlined">send</span>
+            </button>
+        </form>
+    </footer>
+</div>
+{% endblock %}
+
+{% block scripts_extra %}
+{{ chat_history_json|safe }}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const messagesArea = document.getElementById('messagesArea');
+    const chatForm = document.getElementById('chatForm');
+    const messageInput = document.getElementById('messageInput');
+    const sendButton = document.getElementById('sendButton');
+    const micButton = document.getElementById('micButton');
+    
+    const currentCharacterId = "{{ ai_character.id|default:'' }}";
+    const currentUserUsername = "{{ request.user.username }}";
+    const aiCharacterName = "{{ ai_character.character_name|escapejs|default:'AI' }}";
+    const aiAvatarUrl = "{{ ai_character.icon_url|escapejs|default:'' }}";
+    let userAvatarUrl = null;
+    {% if request.user.profile_image %}
+        userAvatarUrl = "{{ request.user.profile_image.url }}";
+    {% endif %}
+    
+    const chatHistoryDataElement = document.getElementById('chat-history-data');
+    const chatHistoryJson = JSON.parse(chatHistoryDataElement.textContent);
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    const csrftoken = getCookie('csrftoken');
+
+    // --- (音声認識の部分は変更なし) ---
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition;
+    let isRecording = false;
+    let finalTranscript = '';
+
+    if (SpeechRecognition) {
+        recognition = new SpeechRecognition();
+        recognition.lang = 'ja-JP';
+        recognition.interimResults = true;
+        recognition.continuous = true;
+
+        recognition.onstart = function() {
+            isRecording = true;
+            micButton.classList.add('mic-recording');
+            messageInput.placeholder = "お話しください…";
+        };
+
+        recognition.onend = function() {
+            isRecording = false;
+            micButton.classList.remove('mic-recording');
+            messageInput.placeholder = "メッセージを入力、またはマイクを押して話してください...";
+        };
+
+        recognition.onresult = function(event) {
+            let interimTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    finalTranscript += event.results[i][0].transcript;
+                } else {
+                    interimTranscript += event.results[i][0].transcript;
+                }
+            }
+            messageInput.value = finalTranscript + interimTranscript;
+        };
+
+        recognition.onerror = function(event) {
+            console.error("音声認識エラー:", event.error);
+            isRecording = false;
+            micButton.classList.remove('mic-recording');
+            messageInput.placeholder = "ごめんなさい、うまく聞き取れませんでした…";
+        };
+    } else {
+        micButton.style.display = 'none';
+    }
+
+    micButton.addEventListener('click', function() {
+        if (!SpeechRecognition) return;
+        if (isRecording) {
+            recognition.stop();
+            setTimeout(() => {
+                handleFormSubmit(new Event('submit', { cancelable: true }));
+            }, 200);
+        } else {
+            finalTranscript = '';
+            messageInput.value = '';
+            recognition.start();
+        }
+    });
+    // --- (音声認識ここまで) ---
+
+    function playAudio(audioUrl) {
+        if(audioUrl) {
+            const audio = new Audio(audioUrl);
+            audio.play().catch(e => console.error("音声の再生に失敗しました:", e));
+        }
+    }
+
+    function scrollToBottom() {
+        messagesArea.scrollTop = messagesArea.scrollHeight;
+    }
+    
+    // ✨ createMessageElement関数を完全分業バージョンに差し替え！
+    function createMessageElement(messageText, senderType, timestampStr, audioUrl = null) {
+        const isAI = senderType === 'ai';
+        const avatarUrl = isAI ? aiAvatarUrl : userAvatarUrl;
+        const avatarInitial = isAI ? aiCharacterName.charAt(0).toUpperCase() : currentUserUsername.charAt(0).toUpperCase();
+        const timestamp = new Date(timestampStr).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+
+        let avatarHtml = avatarUrl 
+            ? `<img alt="Avatar" class="size-8 rounded-full bg-cover bg-center self-end object-cover" src="${avatarUrl}"/>`
+            : `<div class="size-8 rounded-full flex items-center justify-center font-bold text-sm self-end ${isAI ? 'bg-blue-200 text-blue-700' : 'bg-slate-200 text-slate-700'}">${avatarInitial}</div>`;
+        
+        let playButtonHtml = '';
+        if (isAI && audioUrl) {
+            playButtonHtml = `
+                <button class="play-audio-button p-1.5 rounded-full text-slate-500 hover:bg-slate-200 hover:text-blue-500 transition-colors" data-src="${audioUrl}" title="音声を再生">
+                    <span class="material-symbols-outlined text-base">volume_up</span>
+                </button>
+            `;
+        }
+        
+        const proposalRegex = /<!-- SCHEDULE_PROPOSAL_DATA_START -->(.*?)<!-- SCHEDULE_PROPOSAL_DATA_END -->/s;
+        const match = messageText.match(proposalRegex);
+        
+        const cleanMessageText = messageText.replace(proposalRegex, '').trim();
+
+        let buttonsHtml = '';
+        if (match) {
+            try {
+                const proposalData = JSON.parse(match[1]);
+                if (proposalData.type === 'personal_schedule_creation') {
+                     buttonsHtml = `<div class="mt-2 flex gap-2"><button class="proposal-button flex-1 px-4 py-2 bg-green-500 text-white text-sm font-semibold rounded-lg hover:bg-green-600 transition-colors" data-action="create-personal-schedule" data-proposal='${JSON.stringify(proposalData)}'>はい、カレンダーに登録する</button><button class="proposal-button flex-1 px-4 py-2 bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-300 transition-colors" data-action="cancel">いいえ、やめておく</button></div>`;
+                } else if (proposalData.type === 'friend_schedule_request') {
+                    buttonsHtml = `<div class="mt-2 flex gap-2"><button class="proposal-button flex-1 px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 transition-colors" data-action="create-friend-request" data-proposal='${JSON.stringify(proposalData)}'>はい、この内容で申請する</button><button class="proposal-button flex-1 px-4 py-2 bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-300 transition-colors" data-action="cancel">いいえ、やめておく</button></div>`;
+                }
+            } catch (e) { console.error("JSONのパースに失敗しました:", e); }
+        }
+
+        const messageBubbleHtml = `
+            <div class="flex flex-col gap-1 ${isAI ? '' : 'items-end'}">
+                <div class="flex items-end gap-2">
+                    ${isAI ? playButtonHtml : ''}
+                    <div class="p-3 rounded-xl shadow-sm max-w-lg ${isAI ? 'message-bubble-ai rounded-bl-none' : 'message-bubble-user rounded-br-none'}">
+                        <p class="text-sm message-content">${cleanMessageText.replace(/\n/g, '<br>')}</p>
+                        ${buttonsHtml}
+                    </div>
+                </div>
+                <span class="text-xs text-slate-500 ${isAI ? 'self-start' : 'self-end'}">${timestamp}</span>
+            </div>
+        `;
+
+        const messageWrapper = document.createElement('div');
+        messageWrapper.classList.add('flex', 'gap-2.5', 'max-w-xl', 'message-animate-in');
+        if (isAI) {
+            messageWrapper.innerHTML = avatarHtml + messageBubbleHtml;
+        } else {
+            messageWrapper.classList.add('ml-auto', 'justify-end');
+            messageWrapper.innerHTML = `
+                <div class="flex flex-col gap-1 items-end">
+                    <div class="p-3 rounded-xl shadow-sm max-w-lg message-bubble-user rounded-br-none">
+                        <p class="text-sm message-content">${cleanMessageText.replace(/\n/g, '<br>')}</p>
+                    </div>
+                    <span class="text-xs text-slate-500 self-end">${timestamp}</span>
+                </div>
+            `;
+        }
+        return messageWrapper;
+    }
+
+    // ✨ イベントリスナーを統合！再生ボタンも提案ボタンもここで処理するよ！ ✨
+    messagesArea.addEventListener('click', async function(event) {
+        // --- 再生ボタンの処理 ---
+        const playButton = event.target.closest('.play-audio-button');
+        if (playButton) {
+            const audioSrc = playButton.dataset.src;
+            if (audioSrc && audioSrc !== 'null') playAudio(audioSrc); // nullチェックを追加
+            return; 
+        }
+        
+        // --- 提案ボタンの処理 ---
+        const proposalButton = event.target.closest('.proposal-button');
+        if (proposalButton) {
+            const action = proposalButton.dataset.action;
+            const buttonContainer = proposalButton.parentElement;
+            if (action === 'cancel') {
+                buttonContainer.innerHTML = '<p class="text-center text-sm text-slate-500 p-2">キャンセルしました。</p>';
+                return;
+            }
+            buttonContainer.innerHTML = '<p class="text-center text-sm text-slate-500 p-2 animate-pulse">処理中です...</p>';
+            try {
+                const proposal = JSON.parse(proposalButton.dataset.proposal);
+                let url = '';
+                // ここで他のアプリのURLを呼び出す
+                if (action === 'create-friend-request') { url = "{% url 'schedule_requests_app:create_request_from_ai' %}"; }
+                else if (action === 'create-personal-schedule') { url = "{% url 'calendar_app:create_personal_schedule_from_ai' %}"; }
+                
+                if (url) {
+                    const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken, }, body: JSON.stringify(proposal), });
+                    const result = await response.json();
+                    if (response.ok) { buttonContainer.innerHTML = `<p class="text-center text-sm text-green-600 p-2 font-semibold">${result.message}</p>`; }
+                    else { throw new Error(result.message || '不明なエラーが発生しました。'); }
+                }
+            } catch (error) { buttonContainer.innerHTML = `<p class="text-center text-sm text-red-600 p-2 font-semibold">エラー: ${error.message}</p>`; }
+        }
+    });
+
+    function showTypingIndicator() {
+        const existingIndicator = document.getElementById('typingIndicator');
+        if (existingIndicator) existingIndicator.remove();
+        let avatarHtml = aiAvatarUrl ? `<img alt="Avatar" class="size-8 rounded-full bg-cover bg-center self-end object-cover" src="${aiAvatarUrl}"/>` : `<div class="size-8 rounded-full flex items-center justify-center font-bold text-sm bg-blue-200 text-blue-700 self-end">${aiCharacterName.charAt(0).toUpperCase()}</div>`;
+        const indicatorHtml = `<div class="flex gap-2.5 max-w-xl" id="typingIndicator">${avatarHtml}<div class="flex items-center space-x-1.5 p-3 bg-slate-200 rounded-xl rounded-bl-none"><div class="ai-typing-indicator span size-1.5 bg-slate-500 rounded-full"></div><div class="ai-typing-indicator span size-1.5 bg-slate-500 rounded-full"></div><div class="ai-typing-indicator span size-1.5 bg-slate-500 rounded-full"></div></div></div>`;
+        messagesArea.insertAdjacentHTML('beforeend', indicatorHtml);
+        scrollToBottom();
+    }
+    function hideTypingIndicator() {
+        const indicator = document.getElementById('typingIndicator');
+        if (indicator) indicator.remove();
+    }
+
+    async function handleFormSubmit(event) {
+        if(event) event.preventDefault();
+        const userMessage = messageInput.value.trim();
+        if (!userMessage) return;
+        messageInput.value = '';
+        messageInput.focus();
+        messagesArea.appendChild(createMessageElement(userMessage, 'user', new Date().toISOString(), null));
+        scrollToBottom();
+        showTypingIndicator();
+        try {
+            const response = await fetch(`/ai/chat/${currentCharacterId}/send/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+                body: JSON.stringify({ message: userMessage })
+            });
+            const data = await response.json();
+            if (!response.ok) { throw new Error(data.error || 'AIからの応答でエラーが発生しました。'); }
+            
+            messagesArea.appendChild(createMessageElement(data.reply, 'ai', new Date().toISOString(), data.audio_url));
+            
+        } catch (error) {
+            console.error('Error sending message to AI:', error);
+            const errorText = error.message || 'ごめんなさい、AIとの通信でエラーが発生しました。';
+            messagesArea.appendChild(createMessageElement(errorText, 'ai', new Date().toISOString(), null));
+        } finally {
+            hideTypingIndicator();
+            scrollToBottom();
+        }
+    }
+    
+    chatForm.addEventListener('submit', handleFormSubmit);
+
+    function renderInitialMessages() {
+        messagesArea.innerHTML = '';
+        if (chatHistoryJson.length === 0 && currentCharacterId) {
+            const initialAiMessage = `こんにちは、${currentUserUsername}さん！ ${aiCharacterName}だよ。どんなお話をしようか？😊`;
+            messagesArea.appendChild(createMessageElement(initialAiMessage, 'ai', new Date().toISOString(), null));
+        } else {
+            chatHistoryJson.forEach(entry => {
+                messagesArea.appendChild(createMessageElement(entry.message_text, entry.sender_type, entry.timestamp, null));
+            });
+        }
+        setTimeout(scrollToBottom, 100); 
+    }
+
+    renderInitialMessages();
+});
+</script>
+{% endblock %}

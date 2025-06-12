@@ -1,0 +1,59 @@
+{% extends "main_app/base.html" %}
+{% comment %} accounts/templates/accounts/friend_list.html （あやのアレンジ版） {% endcomment %}
+{% load static %}
+
+{% block title %}友達リスト{% endblock %}
+{% block page_title_in_header %}友達リスト{% endblock %}
+
+{% block content %}
+<main class="flex-1 p-6 lg:p-8">
+    <div class="max-w-5xl mx-auto">
+        <div class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8">
+            <h1 class="text-slate-800 text-3xl font-bold">友達リスト</h1>
+            <div class="flex gap-3">
+                <a href="{% url 'accounts:user_search' %}" class="flex items-center gap-2 min-w-[84px] cursor-pointer justify-center overflow-hidden rounded-lg h-10 px-4 bg-blue-500 text-white text-sm font-medium shadow-md hover:bg-blue-600 transition-colors">
+                    <span class="material-symbols-outlined text-base">person_search</span>
+                    <span class="truncate">友達を探す</span>
+                </a>
+                <a href="{% url 'accounts:friend_requests_received' %}" class="flex items-center gap-2 min-w-[84px] cursor-pointer justify-center rounded-lg h-10 px-4 bg-slate-100 text-slate-700 text-sm font-medium shadow-sm hover:bg-slate-200 transition-colors">
+                    <span class="material-symbols-outlined text-base">group_add</span>
+                    <span class="truncate">届いた申請</span>
+                </a>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {% for friend in friends_list %}
+            <div class="group relative bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden transform hover:-translate-y-1">
+                <div class="absolute top-0 left-0 w-full h-16 bg-gradient-to-br from-blue-200 to-purple-200"></div>
+                <div class="relative pt-8 p-5 flex flex-col items-center text-center">
+                    <div class="w-24 h-24 bg-slate-100 text-slate-400 flex items-center justify-center font-bold text-4xl bg-center bg-no-repeat bg-cover rounded-full mb-4 border-4 border-white shadow-md">
+                        {{ friend.username.0|upper }}
+                    </div>
+                    <p class="text-slate-800 text-lg font-semibold">{{ friend.username }}</p>
+                    <p class="text-slate-400 text-xs font-medium">{{ friend.email }}</p>
+                </div>
+                <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <form action="{% url 'accounts:remove_friend' friend.id %}" method="post" onsubmit="return confirm('本当に{{ friend.username }}さんとの友達関係を解除しますか？');">
+                        {% csrf_token %}
+                        <button type="submit" class="p-1.5 bg-white/70 text-red-500 hover:bg-red-100 rounded-full shadow-sm" title="友達から削除">
+                            <span class="material-symbols-outlined text-base">person_remove</span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% empty %}
+            <div class="sm:col-span-2 md:col-span-3 lg:col-span-4 bg-white rounded-xl shadow-lg p-8 text-center border-2 border-dashed border-slate-200 flex flex-col items-center">
+                <span class="material-symbols-outlined text-6xl text-slate-400 mb-4">explore</span>
+                <p class="text-slate-800 text-xl font-semibold">まだ見ぬ友達を探しに行こう！</p>
+                <p class="text-slate-500 mt-2 mb-6 max-w-md">友達を追加すると、カレンダーの共有や、AIによる日程調整がもっと便利になります。さあ、最初の友達を見つけましょう！</p>
+                <a href="{% url 'accounts:user_search' %}" class="inline-flex items-center gap-2 cursor-pointer justify-center rounded-lg h-11 px-6 bg-blue-500 text-white font-semibold shadow-md hover:bg-blue-600 transition-colors">
+                    <span class="material-symbols-outlined">person_search</span>
+                    友達を探しに行く
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</main>
+{% endblock %}

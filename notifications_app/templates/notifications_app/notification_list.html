@@ -1,0 +1,70 @@
+{% extends "main_app/base.html" %}
+{% load static %}
+
+{% block title %}お知らせ一覧{% endblock %}
+{% block page_title_in_header %}お知らせ{% endblock %}
+
+{% block content %}
+<main class="flex-1 p-6 lg:p-8 w-full">
+    <div class="max-w-3xl mx-auto">
+        <div class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8">
+            <h1 class="text-gray-800 text-3xl md:text-4xl font-bold">お知らせ</h1>
+            {% if notifications %}
+            <form action="{% url 'notifications_app:mark_all_as_read' %}" method="post">
+                {% csrf_token %}
+                <button type="submit" class="flex items-center justify-center gap-2 min-w-[84px] cursor-pointer rounded-full h-10 px-5 bg-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-300 transition-colors">
+                    <span class="material-symbols-outlined text-base">done_all</span>
+                    <span>すべて既読にする</span>
+                </button>
+            </form>
+            {% endif %}
+        </div>
+
+        <div class="space-y-4">
+            {% for notification in notifications %}
+            <div class="bg-white rounded-xl shadow-sm p-4 hover:shadow-md transition-shadow duration-300 flex items-start gap-4 {% if not notification.is_read %}border-l-4 border-blue-500{% endif %}">
+                {# --- アイコン部分 --- #}
+                {% if notification.notification_type == 'friend_request' or notification.notification_type == 'schedule_adjustment_request_received' %}
+                    <div class="bg-blue-100 text-blue-600 flex items-center justify-center rounded-full shrink-0 size-10 mt-1"><span class="material-symbols-outlined">person_add</span></div>
+                {% elif notification.notification_type == 'friend_request_accepted' %}
+                    <div class="bg-pink-100 text-pink-600 flex items-center justify-center rounded-full shrink-0 size-10 mt-1"><span class="material-symbols-outlined">favorite</span></div>
+                {% elif notification.notification_type == 'schedule_reminder' %}
+                     <div class="bg-yellow-100 text-yellow-600 flex items-center justify-center rounded-full shrink-0 size-10 mt-1"><span class="material-symbols-outlined">alarm</span></div>
+                {% elif notification.notification_type == 'schedule_adjustment_request_accepted' %}
+                     <div class="bg-green-100 text-green-600 flex items-center justify-center rounded-full shrink-0 size-10 mt-1"><span class="material-symbols-outlined">task_alt</span></div>
+                {% elif notification.notification_type == 'schedule_adjustment_request_declined' %}
+                     <div class="bg-red-100 text-red-600 flex items-center justify-center rounded-full shrink-0 size-10 mt-1"><span class="material-symbols-outlined">cancel</span></div>
+                {% else %}
+                    <div class="bg-gray-100 text-gray-600 flex items-center justify-center rounded-full shrink-0 size-10 mt-1"><span class="material-symbols-outlined">notifications</span></div>
+                {% endif %}
+                
+                {# --- メッセージ本文 --- #}
+                <div class="flex-grow">
+                    <p class="text-gray-800 font-medium leading-relaxed">{{ notification.message|linebreaksbr }}</p>
+                    <p class="text-gray-500 text-xs mt-1">{{ notification.created_at|date:"Y/m/d G:i" }}</p>
+                </div>
+
+                {# --- アクションボタン --- #}
+                <div class="flex flex-col sm:flex-row gap-2 items-center ml-auto shrink-0 self-center">
+                    {% if notification.get_absolute_url %}
+                        <a href="{{ notification.get_absolute_url }}" class="flex items-center justify-center text-xs text-white font-semibold p-2 rounded-lg bg-blue-500 hover:bg-blue-600 transition-colors shadow-sm">詳細</a>
+                    {% endif %}
+                    {% if not notification.is_read %}
+                        <form action="{% url 'notifications_app:mark_as_read' notification.id %}" method="post">
+                            {% csrf_token %}
+                            <button type="submit" class="flex items-center justify-center text-xs text-gray-500 hover:text-gray-800 p-2 rounded-lg hover:bg-gray-100 transition-colors" title="既読にする"><span class="material-symbols-outlined text-base">check</span></button>
+                        </form>
+                    {% endif %}
+                </div>
+            </div>
+            {% empty %}
+                <div class="bg-white rounded-lg shadow-sm p-8 text-center border-2 border-dashed border-slate-200">
+                    <span class="material-symbols-outlined text-5xl text-slate-400 mb-2">notifications_off</span>
+                    <p class="text-gray-600 font-medium">新しいお知らせはありません。</p>
+                    <p class="text-slate-500 text-sm mt-1">お知らせが届くと、ここに表示されます。</p>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</main>
+{% endblock %}

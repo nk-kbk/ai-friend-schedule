@@ -1,0 +1,142 @@
+{% extends "main_app/base.html" %}
+{% load static %}
+
+{% block title %}マイプロフィール{% endblock %}
+{% block page_title_in_header %}マイプロフィール{% endblock %}
+
+{% block content %}
+{# --- ✨ 修正点！ --- mainタグの外にコンテナ用のdivを追加して、中央寄せを確実にするよ！ --- #}
+<div class="flex flex-1 justify-center">
+    <main class="w-full max-w-4xl px-4 sm:px-6 lg:px-8 py-12">
+        {# --- プロフィールヘッダー --- #}
+        <section class="mb-12 rounded-xl bg-white shadow-lg overflow-hidden">
+            <div class="p-8 sm:p-10 bg-gradient-to-br from-blue-500 to-indigo-600 text-white relative">
+                <div class="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
+                <div class="flex flex-col sm:flex-row items-center gap-6 relative z-10">
+                    <div class="relative">
+                        <label for="profile_image_upload" class="cursor-pointer group">
+                            {% if user.profile_image %}
+                                <img src="{{ user.profile_image.url }}" alt="プロフィール画像" class="w-24 h-24 sm:w-28 sm:h-28 rounded-full object-cover bg-white shadow-md border-4 border-white group-hover:opacity-80 transition-opacity">
+                            {% else %}
+                                <div class="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-white flex items-center justify-center text-blue-600 text-5xl sm:text-6xl font-bold shadow-md border-4 border-white group-hover:opacity-80 transition-opacity">
+                                    {{ user.username.0|upper }}
+                                </div>
+                            {% endif %}
+                            <div class="absolute bottom-0 right-0 bg-white p-2 rounded-full shadow-md hover:bg-slate-100 transition-all transform group-hover:scale-110">
+                                <span class="material-symbols-outlined text-blue-600 text-lg">edit</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div class="text-center sm:text-left">
+                        <h1 class="text-3xl sm:text-4xl font-bold tracking-tight">おかえりなさい、<br class="sm:hidden"/>{{ user.username }}さん！</h1>
+                        <p class="text-lg text-blue-100 mt-2">{{ user.email }}</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        {# --- 統計情報カード --- #}
+        <section class="mb-12">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                {# --- ✨ 修正点！ --- 「今日の予定」にして、リンク先をダッシュボードに！ --- #}
+                <a href="{% url 'dashboard_top_page' %}" class="bg-white p-6 rounded-xl shadow-lg flex items-center gap-4 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+                    <span class="material-symbols-outlined text-4xl text-purple-500">today</span>
+                    <div>
+                        <p class="text-slate-600 text-sm">今日の予定</p>
+                        <p class="text-slate-900 text-2xl font-bold">{{ todays_events_count }}</p>
+                    </div>
+                </a>
+                {# --- ✨ 修正点！ --- 「友達」カードにリンク先を追加！ --- #}
+                <a href="{% url 'accounts:friend_list' %}" class="bg-white p-6 rounded-xl shadow-lg flex items-center gap-4 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+                    <span class="material-symbols-outlined text-4xl text-teal-500">group</span>
+                    <div>
+                        <p class="text-slate-600 text-sm">友達</p>
+                        <p class="text-slate-900 text-2xl font-bold">{{ friends_count }}</p>
+                    </div>
+                </a>
+                {# --- ✨ 修正点！ --- 「未読のお知らせ」カードにリンク先を追加！ --- #}
+                <a href="{% url 'notifications_app:notification_list' %}" class="bg-white p-6 rounded-xl shadow-lg flex items-center gap-4 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+                    <span class="material-symbols-outlined text-4xl text-amber-500">notifications</span>
+                    <div>
+                        <p class="text-slate-600 text-sm">未読のお知らせ</p>
+                        <p class="text-slate-900 text-2xl font-bold">{{ unread_notifications_count }}</p>
+                    </div>
+                </a>
+            </div>
+        </section>
+        
+        {# --- アカウント設定 --- #}
+        <section>
+             <h2 class="text-2xl font-bold text-slate-800 mb-6 px-1">アカウント設定</h2>
+             <div class="bg-white p-6 rounded-xl shadow-lg space-y-3">
+                 <a href="{% url 'accounts:profile_edit' %}" class="flex items-center w-full p-4 rounded-lg hover:bg-slate-100 transition-colors group">
+                     <span class="material-symbols-outlined text-slate-500 mr-4">badge</span>
+                     <span class="font-medium text-slate-700 flex-grow">プロフィール情報を編集する</span>
+                     <span class="material-symbols-outlined text-slate-400 group-hover:translate-x-1 transition-transform">chevron_right</span>
+                 </a>
+                 <div class="flex items-center w-full p-4 rounded-lg bg-slate-50 text-slate-400 cursor-not-allowed" title="この機能は現在準備中です">
+                     <span class="material-symbols-outlined mr-4">lock</span>
+                     <span class="font-medium flex-grow">パスワードを変更する</span>
+                     <span class="material-symbols-outlined">construction</span>
+                 </div>
+                 <div class="flex items-center w-full p-4 rounded-lg bg-slate-50 text-slate-400 cursor-not-allowed" title="この機能は現在準備中です">
+                    <span class="material-symbols-outlined mr-4">palette</span>
+                    <span class="font-medium flex-grow">AIキャラクターを選択 / 編集</span>
+                    <span class="material-symbols-outlined">construction</span>
+                </div>
+             </div>
+        </section>
+
+         {# --- ログアウト & アカウント削除 --- #}
+        <section class="mt-8 pt-6 border-t border-dashed border-slate-300">
+            <div class="flex items-center justify-between">
+               <form action="{% url 'accounts:logout' %}" method="post">
+                   {% csrf_token %}
+                   <button type="submit" class="flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors">
+                       <span class="material-symbols-outlined">logout</span>
+                       ログアウト
+                   </button>
+               </form>
+               <a href="{% url 'accounts:account_delete' %}" onclick="return confirm('本当にアカウントを削除しますか？この操作は取り消せません。')" class="text-xs text-red-500 hover:text-red-700 hover:underline">
+                   アカウントを削除
+               </a>
+            </div>
+       </section>
+    </main>
+</div>
+
+{# --- プロフィール画像アップロード用の隠しフォーム --- #}
+<form id="image_upload_form" method="post" enctype="multipart/form-data" class="hidden">
+    {% csrf_token %}
+    {{ image_form.as_p }}
+</form>
+{% endblock %}
+
+{% block scripts_extra %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // フォーム自体は隠れてるので、labelをクリックしたらinputがクリックされるようにするよ！
+    const uploadLabel = document.querySelector('label[for="id_profile_image"]'); // Djangoが生成するIDに合わせる
+    const uploadInput = document.getElementById('id_profile_image'); // Djangoが生成するID
+    const imageForm = document.getElementById('image_upload_form');
+
+    // プロフィール画像アップロードのイベントリスナー
+    const profileImageContainer = document.querySelector('label[for="profile_image_upload"]');
+
+    if (profileImageContainer && uploadInput && imageForm) {
+        // 画像部分をクリックした時に、隠れたinput要素をクリックさせる
+        profileImageContainer.addEventListener('click', (e) => {
+            e.preventDefault(); // labelのデフォルトの動作を防ぐ
+            uploadInput.click();
+        });
+
+        // ファイルが選択されたら、自動でフォームを送信
+        uploadInput.addEventListener('change', function() {
+            if (this.files && this.files.length > 0) {
+                imageForm.submit();
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

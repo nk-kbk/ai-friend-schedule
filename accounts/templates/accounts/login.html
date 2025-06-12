@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>{% block title %}AIフレンドスケジュール - ログイン{% endblock %}</title>
+    <link crossorigin="" href="https://fonts.gstatic.com/" rel="preconnect"/>
+    <link as="style" href="https://fonts.googleapis.com/css2?display=swap&family=Noto+Sans+JP%3Awght%40400%3B500%3B700%3B900&family=Spline+Sans%3Awght%40400%3B500%3B700" onload="this.rel='stylesheet'" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+    {# Favicon - 必要ならプロジェクト共通のものを指定 (例: {% static 'images/favicon.ico' %}) #}
+    {# <link rel="icon" href="#"> #}
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <style>
+        /* Tailwind CSS CDN利用時のカスタムスタイル */
+        body {
+            font-family: "Spline Sans", "Noto Sans JP", sans-serif;
+        }
+        .form-input {
+            appearance: none;
+            position: relative;
+            display: block;
+            width: 100%;
+            padding-left: 0.75rem; /* px-3 */
+            padding-right: 0.75rem; /* px-3 */
+            padding-top: 0.875rem; /* py-3.5 (Tailwindのpy-3は0.75remなので、AIさんの指定に合わせる) */
+            padding-bottom: 0.875rem; /* py-3.5 */
+            border-width: 1px;
+            border-color: #d1d5db; /* Tailwindのborder-gray-300 (AIさんは #dde0e4) */
+            color: #1f2937; /* Tailwindのtext-gray-800 (AIさんは #121417) */
+            border-radius: 0.375rem; /* rounded-md */
+            font-size: 0.875rem; /* text-sm */
+            line-height: 1.25rem; /* leading-5 */
+        }
+        .form-input::placeholder {
+            color: #6b7280; /* Tailwindのplaceholder-gray-500 (AIさんは #677583) */
+        }
+        @media (min-width: 640px) { /* sm:text-base */
+            .form-input {
+                font-size: 1rem; /* text-base */
+                line-height: 1.5rem; /* leading-6 */
+            }
+        }
+        .form-input:focus {
+            outline: 2px solid transparent;
+            outline-offset: 2px;
+            border-color: #2563eb; /* Tailwindのfocus:border-blue-600 (AIさんは #317fcd) */
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); /* Tailwindのfocus:ring-blue-500/20 (AIさんは rgba(49,127,205,0.2))*/
+            z-index: 10;
+        }
+        /* Django Messages Framework */
+        .django-messages {
+            padding: 1rem; margin-bottom: 1rem; border-radius: 0.375rem; font-size: 0.875rem;
+            border-width: 1px;
+        }
+        .django-messages.debug { background-color: #f3f4f6; color: #374151; border-color: #d1d5db; }
+        .django-messages.info { background-color: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+        .django-messages.success { background-color: #f0fdf4; color: #15803d; border-color: #86efac; }
+        .django-messages.warning { background-color: #fefce8; color: #a16207; border-color: #fde047; }
+        .django-messages.error { background-color: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+
+        /* フォームフィールドごとのエラーメッセージ */
+        .form-field-errors { list-style-type: none; padding: 0; margin-top: 0.25rem; }
+        .form-field-errors li { color: #ef4444; font-size: 0.75rem; }
+    </style>
+</head>
+<body class="bg-white">
+    <div class="relative flex size-full min-h-screen flex-col group/design-root overflow-x-hidden">
+        <div class="layout-container flex h-full grow flex-col">
+            {# --- ヘッダー --- #}
+            <header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-gray-200 px-6 sm:px-10 py-4">
+                <a href="{% url 'landing_page' %}" class="flex items-center gap-3 sm:gap-4 text-gray-900">
+                    <div class="size-6 sm:size-8 text-[#317fcd]">
+                        <svg fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M44 11.2727C44 14.0109 39.8386 16.3957 33.69 17.6364C39.8386 18.877 44 21.2618 44 24C44 26.7382 39.8386 29.123 33.69 30.3636C39.8386 31.6043 44 33.9891 44 36.7273C44 40.7439 35.0457 44 24 44C12.9543 44 4 40.7439 4 36.7273C4 33.9891 8.16144 31.6043 14.31 30.3636C8.16144 29.123 4 26.7382 4 24C4 21.2618 8.16144 18.877 14.31 17.6364C8.16144 16.3957 4 14.0109 4 11.2727C4 7.25611 12.9543 4 24 4C35.0457 4 44 7.25611 44 11.2727Z" fill="currentColor"></path>
+                        </svg>
+                    </div>
+                    <h1 class="text-gray-900 text-lg sm:text-xl font-bold leading-tight tracking-[-0.015em]">AIフレンドスケジュール</h1>
+                </a>
+                <nav class="hidden md:flex items-center gap-6 sm:gap-8">
+                    <a class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-[#317fcd] text-white text-sm font-semibold leading-normal tracking-[0.015em] hover:bg-[#2567a8] transition-colors" href="{% url 'accounts:signup' %}">
+                        <span class="truncate">無料ではじめる</span>
+                    </a>
+                </nav>
+                <button class="md:hidden text-gray-900">
+                    <span class="material-icons">menu</span>
+                </button>
+            </header>
+
+            {# --- メインコンテンツ --- #}
+            <main class="flex flex-1 justify-center items-center py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
+                <div class="w-full max-w-md space-y-6 p-6 sm:p-8 bg-white rounded-xl shadow-xl border border-gray-100">
+                    <div>
+                        <h2 class="text-center text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">おかえりなさい！</h2>
+                        <p class="mt-2 text-center text-sm text-gray-600">
+                            AIフレンドスケジュールへログインしてください。
+                        </p>
+                    </div>
+
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="django-messages {% if message.tags %}{{ message.tags }}{% else %}info{% endif %}">
+                                {{ message|safe }}
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+
+                    {% if form.non_field_errors %}
+                        <div class="django-messages error">
+                            {% for error in form.non_field_errors %}
+                                <p>{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <form class="mt-6 space-y-6" method="POST" action="{% url 'accounts:login' %}">
+                        {% csrf_token %}
+                        
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-gray-700 text-sm font-medium mb-1.5" for="{{ form.username.id_for_label }}">
+                                    ユーザー名またはメールアドレス
+                                </label>
+                                <input 
+                                    type="text"
+                                    name="{{ form.username.html_name }}" 
+                                    id="{{ form.username.id_for_label }}"
+                                    autocomplete="username"
+                                    class="form-input {% if form.username.errors %}border-red-500 focus:border-red-500 focus:ring-red-500/20{% else %}border-gray-300 focus:border-[#317fcd] focus:ring-[#317fcd]/20{% endif %}"
+                                    placeholder="例: yourname / you@example.com" 
+                                    required
+                                    value="{{ form.username.value|default_if_none:'' }}"
+                                />
+                                {% if form.username.errors %}
+                                    <ul class="form-field-errors">
+                                        {% for error in form.username.errors %}
+                                            <li>{{ error }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                {% endif %}
+                            </div>
+                            <div>
+                                <label class="block text-gray-700 text-sm font-medium mb-1.5" for="{{ form.password.id_for_label }}">
+                                    パスワード
+                                </label>
+                                <input 
+                                    type="password"
+                                    name="{{ form.password.html_name }}"
+                                    id="{{ form.password.id_for_label }}"
+                                    autocomplete="current-password"
+                                    class="form-input {% if form.password.errors %}border-red-500 focus:border-red-500 focus:ring-red-500/20{% else %}border-gray-300 focus:border-[#317fcd] focus:ring-[#317fcd]/20{% endif %}"
+                                    placeholder="••••••••" 
+                                    required
+                                />
+                                 {% if form.password.errors %}
+                                    <ul class="form-field-errors">
+                                        {% for error in form.password.errors %}
+                                            <li>{{ error }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-end mt-4">
+                            <div class="text-sm">
+                                <a class="font-medium text-[#317fcd] hover:text-[#2567a8] hover:underline" href="#"> 
+                                    パスワードをお忘れですか？
+                                </a>
+                            </div>
+                        </div>
+
+                        <div class="mt-6">
+                            <button class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-semibold rounded-full text-white bg-[#317fcd] hover:bg-[#2567a8] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2567a8] transition-colors" type="submit">
+                                ログイン
+                            </button>
+                        </div>
+                    </form>
+
+                    <p class="mt-8 text-center text-sm text-gray-500">
+                        アカウントをお持ちでないですか？
+                        <a class="font-medium text-[#317fcd] hover:text-[#2567a8] hover:underline" href="{% url 'accounts:signup' %}">
+                            新規登録
+                        </a>
+                    </p>
+                </div>
+            </main>
+        </div>
+    </div>
+</body>
+</html>

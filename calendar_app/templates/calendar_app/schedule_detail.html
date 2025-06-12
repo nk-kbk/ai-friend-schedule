@@ -1,0 +1,80 @@
+{% extends "main_app/base.html" %}
+{% load static %}
+
+{% block title %}予定の詳細{% endblock %}
+{% block page_title_in_header %}予定の詳細{% endblock %}
+
+{% block content %}
+<main class="flex-1 p-6 lg:p-10">
+    <div class="max-w-2xl mx-auto bg-white shadow-xl rounded-xl">
+        <div class="p-6 sm:p-8">
+            <h1 class="text-3xl font-bold text-gray-800 mb-6">{{ schedule.title }}</h1>
+            <hr class="mb-6 border-gray-200"/>
+            
+            <div class="mb-6">
+                <h2 class="text-xl font-semibold text-gray-700 mb-4">イベント詳細</h2>
+                <div class="space-y-4">
+                    <div class="flex items-start gap-3 p-4 bg-slate-50 rounded-lg">
+                        <span class="material-symbols-outlined text-blue-600 mt-1">calendar_today</span>
+                        <div>
+                            <p class="text-gray-800 text-base font-medium">日時</p>
+                            <p class="text-gray-600 text-sm">{{ schedule.start_datetime|date:"Y年n月j日(D)" }} {{ schedule.start_datetime|time:"H:i" }}〜{{ schedule.end_datetime|time:"H:i" }}</p>
+                        </div>
+                    </div>
+                    {% if schedule.location %}
+                    <div class="flex items-start gap-3 p-4 bg-slate-50 rounded-lg">
+                        <span class="material-symbols-outlined text-blue-600 mt-1">location_on</span>
+                        <div>
+                            <p class="text-gray-800 text-base font-medium">場所</p>
+                            <p class="text-gray-600 text-sm">{{ schedule.location }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <hr class="mb-6 border-gray-200"/>
+            <div class="mb-6">
+                <h2 class="text-xl font-semibold text-gray-700 mb-4">参加者</h2>
+                <div class="flex items-center -space-x-2">
+                    {% for participant in schedule.participants.all %}
+                    <div class="relative group" title="{{ participant.username }}">
+                        {% if participant.profile_image %}
+                        <img alt="{{ participant.username }}のアイコン" class="inline-block size-10 rounded-full ring-2 ring-white object-cover" src="{{ participant.profile_image.url }}"/>
+                        {% else %}
+                        <div class="inline-block size-10 rounded-full ring-2 ring-white bg-slate-200 text-slate-600 flex items-center justify-center font-bold">{{ participant.username.0|upper }}</div>
+                        {% endif %}
+                    </div>
+                    {% empty %}
+                    <p class="text-sm text-gray-500">参加者はいません。</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {% if schedule.description %}
+            <hr class="mb-6 border-gray-200"/>
+            <div class="mb-8">
+                <h2 class="text-xl font-semibold text-gray-700 mb-3">詳細</h2>
+                <p class="text-gray-600 text-sm leading-relaxed">{{ schedule.description|linebreaksbr }}</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="p-4 bg-slate-50 border-t border-slate-200">
+            <div class="flex flex-col space-y-3 sm:flex-row sm:space-y-0 sm:space-x-3 sm:justify-end">
+                <a href="{% url 'calendar_app:schedule_edit' schedule.id %}" class="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-lg bg-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-300 transition-colors">
+                    <span class="material-symbols-outlined text-base">edit</span>
+                    編集
+                </a>
+                <form action="{% url 'calendar_app:schedule_delete' schedule.id %}" method="post" onsubmit="return confirm('本当にこの予定を削除しますか？');" class="flex-1 sm:flex-none">
+                    {% csrf_token %}
+                    <button type="submit" class="w-full flex items-center justify-center gap-2 rounded-lg bg-red-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-600 transition-colors">
+                        <span class="material-symbols-outlined text-base">delete</span>
+                        削除
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</main>
+{% endblock %}

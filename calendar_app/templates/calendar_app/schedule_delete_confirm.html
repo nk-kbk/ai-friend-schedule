@@ -1,0 +1,17 @@
+{% extends "main_app/base.html" %}
+
+{% block title %}{{ page_title|default:"予定の削除確認" }} - AIお友達スケジュール{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>{{ page_title }}</h1>
+    <p>本当に予定「<strong>{{ schedule.title }}</strong>」（{{ schedule.start_datetime|date:"Y/n/j G:i" }}開始）を削除しますか？</p>
+    <p class="text-danger">この操作は取り消せません。</p>
+
+    <form method="post">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">はい、削除します</button>
+        <a href="{% url 'calendar_app:schedule_detail' schedule.id %}" class="btn btn-secondary">いいえ、キャンセルします</a>
+    </form>
+</div>
+{% endblock %}

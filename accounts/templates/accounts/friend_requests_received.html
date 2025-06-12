@@ -1,0 +1,59 @@
+{% extends "main_app/base.html" %}
+{% load static %}
+
+{% block title %}届いた友達申請{% endblock %}
+{% block page_title_in_header %}届いた友達申請{% endblock %}
+
+{% block content %}
+<main class="flex-1 p-6 md:p-8 lg:p-10 bg-slate-50 overflow-y-auto">
+    <header class="mb-8 max-w-2xl mx-auto">
+        <h1 class="text-3xl font-bold text-slate-800">友達申請</h1>
+        <p class="text-slate-500 mt-1">あなたに届いている友達申請の一覧です。</p>
+    </header>
+    <div class="space-y-6 max-w-2xl mx-auto">
+        {% for req in pending_requests %}
+        <div class="bg-white rounded-xl shadow-lg overflow-hidden transition-all duration-300 hover:shadow-xl hover:scale-[1.02]">
+            <div class="p-5 flex items-center gap-4">
+                {# --- 申請者のアバター --- #}
+                <div class="size-14 rounded-full object-cover bg-slate-200 text-slate-500 flex items-center justify-center shrink-0 font-bold text-2xl">
+                    {{ req.user_from.username.0|upper }}
+                </div>
+                {# --- 申請者情報 --- #}
+                <div class="flex-grow">
+                    <p class="text-slate-800 text-lg font-semibold">{{ req.user_from.username }}</p>
+                    <p class="text-slate-500 text-sm">さんから友達申請が届いています。</p>
+                </div>
+                <p class="text-slate-400 text-xs font-medium shrink-0">{{ req.requested_at|timesince }}前</p>
+            </div>
+            {# --- アクションボタン --- #}
+            <div class="px-5 pb-5 pt-3 flex gap-3 justify-end border-t border-slate-100 bg-slate-50/50">
+                <form action="{% url 'accounts:respond_friend_request' req.id 'decline' %}" method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="flex items-center justify-center gap-2 h-10 px-5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 transition-colors text-sm font-medium">
+                        <span class="material-symbols-outlined text-base">close</span>
+                        拒否する
+                    </button>
+                </form>
+                <form action="{% url 'accounts:respond_friend_request' req.id 'accept' %}" method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="flex items-center justify-center gap-2 h-10 px-5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors text-sm font-medium shadow-sm">
+                        <span class="material-symbols-outlined text-base">check</span>
+                        承認する
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% empty %}
+        <div class="bg-white rounded-xl shadow-lg p-8 text-center border-2 border-dashed border-slate-200 flex flex-col items-center">
+            <span class="material-symbols-outlined text-6xl text-slate-400 mb-4">all_inbox</span>
+            <p class="text-slate-800 text-xl font-semibold">今は新しい申請はありません</p>
+            <p class="text-slate-500 mt-2 mb-6 max-w-md">新しい友達申請が届くと、ここに表示されます。友達を探しに行きますか？</p>
+            <a href="{% url 'accounts:user_search' %}" class="inline-flex items-center gap-2 cursor-pointer justify-center rounded-lg h-11 px-6 bg-blue-500 text-white font-semibold shadow-md hover:bg-blue-600 transition-colors">
+                <span class="material-symbols-outlined">person_search</span>
+                友達を探す
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+</main>
+{% endblock %}

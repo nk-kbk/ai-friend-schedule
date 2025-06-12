@@ -1,0 +1,311 @@
+{% extends "main_app/base.html" %}
+{% load static %}
+
+{% block title %}ダッシュボード - AIフレンドスケジュール{% endblock %}
+
+{% block head_extra_css %}
+<style>
+    /* ダッシュボード固有のスタイル */
+    .dashboard-container {
+        /* grid-template-columns は Tailwindクラスで指定 */
+        gap: 1.5rem; /* Tailwindの gap-6 相当 */
+    }
+    .welcome-banner {
+      background: linear-gradient(135deg, #60a5fa, #3b82f6); /* Tailwindのsky-400からblue-500へのグラデーション (仮) */
+      background-size: cover;
+      background-position: center;
+      animation: fadeInAnimation 0.5s ease-out;
+    }
+    .card-item:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.08); /* Tailwindの shadow-lg 相当 */
+    }
+    .ai-avatar-float {
+      animation: floatAnimation 3s ease-in-out infinite;
+    }
+    @keyframes fadeInAnimation {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes floatAnimation {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-8px); }
+    }
+    
+    /* 右側の予定一覧エリアのスタイル */
+    /* ✨ 修正ポイント！ 高さが固定されてると、予定が多い時に見切れちゃうから、max-heightにするね！ ✨ */
+    .daily-schedule-list { 
+        max-height: 20rem; /* 約320px */
+        overflow-y: auto; 
+    }
+    
+    /* ✨ 修正ポイント！ スクロールバーのデザインをちょっとだけ可愛くするよ（おまけ）✨ */
+    .daily-schedule-list::-webkit-scrollbar {
+        width: 6px;
+    }
+    .daily-schedule-list::-webkit-scrollbar-track {
+        background: #f1f5f9; /* slate-100 */
+        border-radius: 3px;
+    }
+    .daily-schedule-list::-webkit-scrollbar-thumb {
+        background: #94a3b8; /* slate-400 */
+        border-radius: 3px;
+    }
+    .daily-schedule-list::-webkit-scrollbar-thumb:hover {
+        background: #64748b; /* slate-500 */
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="p-6 md:p-10">
+    <div class="max-w-7xl mx-auto"> {# 全体のコンテナを少し広めにしてみるね #}
+        {# --- ウェルカムバナー --- #}
+        <section class="mb-8 md:mb-12 welcome-banner rounded-xl p-8 shadow-lg flex items-center justify-between relative overflow-hidden text-white">
+            <div>
+                <h1 class="text-3xl md:text-4xl font-bold mb-2">
+                    こんにちは、 <span class="bg-gradient-to-r from-sky-300 to-blue-300 text-transparent bg-clip-text animate-pulse">{{ user.username }}さん！</span>
+                </h1>
+                <p class="text-slate-100 text-lg">あやと一緒に、今日の予定もバッチリ管理しよう！</p>
+            </div>
+            <img alt="AIキャラクター「あや」" class="w-24 h-24 md:w-32 md:h-32 absolute right-4 bottom-0 opacity-90 -mb-4 rounded-full shadow-lg ai-avatar-float object-cover object-[center_30%]" src="https://cdn1.genspark.ai/user-upload-image/gpt_image_generated/8b492264-1196-48bb-adc2-30a8453b7770_wm" />
+        </section>
+
+        {# --- メイングリッドレイアウト --- #}
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8 dashboard-container"> 
+
+            {# --- 月間カレンダー表示エリア (lgスクリーンでは2列分占有) --- #}
+            <section id="dashboard-calendar-container" class="bg-white p-4 sm:p-6 rounded-xl shadow-lg lg:col-span-2 card-item">
+                {# --- ✨ 修正ポイント！ カレンダーのヘッダーを追加して、月移動できるようにするよ！ --- #}
+                <div class="flex justify-between items-center mb-4">
+                    <button data-cal-nav="prev" class="p-2 rounded-full hover:bg-slate-100 text-slate-600" title="前の月">
+                        <span class="material-symbols-outlined">arrow_back_ios_new</span>
+                    </button>
+                    <h2 class="text-lg sm:text-xl font-bold text-slate-800">{{ current_year }}年 {{ current_month }}月</h2>
+                    <button data-cal-nav="next" class="p-2 rounded-full hover:bg-slate-100 text-slate-600" title="次の月">
+                        <span class="material-symbols-outlined">arrow_forward_ios</span>
+                    </button>
+                </div>
+                
+                <div id="calendar-goes-here">
+                    {{ calendar_html|safe }} {# Pythonビューから渡されたカレンダーHTMLを表示 #}
+                </div>
+                <div class="mt-4 text-center">
+                    <a href="{% url 'calendar_app:monthly_calendar_today' %}" class="text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors">
+                        カレンダー全体を見る →
+                    </a>
+                </div>
+            </section>
+
+            {# --- 右側カラム (日付ごとの予定一覧、AI紹介、クイックリンク) --- #}
+            <div class="lg:col-span-1 grid grid-cols-1 gap-6 md:gap-8">
+                {# --- 日付ごとの予定一覧表示エリア --- #}
+                <section id="daily-schedule-display" class="bg-white p-4 sm:p-6 rounded-xl shadow-lg card-item">
+                    <h3 class="text-xl font-semibold text-slate-700 mb-4">
+                        {# --- ✨ 修正ポイント！ このspanの中身をJSで書き換えるよ！ --- #}
+                        <span id="selected-date-display">今日</span>の予定
+                        <a href="{% url 'calendar_app:schedule_new' %}" class="float-right flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors" title="新しい予定を追加">
+                            <span class="material-symbols-outlined text-base">add_circle</span>
+                            追加
+                        </a>
+                    </h3>
+                    <div id="schedule-list-for-date" class="space-y-3 daily-schedule-list">
+                        {# --- ✨ 修正ポイント！ 初期表示はJSに任せるので、ここはいったん空っぽに！ --- #}
+                    </div>
+                </section>
+
+                {# --- AIアシスタント紹介 (変更なし) --- #}
+                <section class="bg-white p-6 rounded-xl shadow-lg flex flex-col items-center text-center card-item">
+                    <img alt="AIキャラクター「あや」" 
+                         class="w-32 h-32 md:w-40 md:h-40 rounded-full mb-4 border-4 border-pink-300 shadow-md ai-avatar-float object-cover object-[center_30%]" 
+                         src="https://cdn1.genspark.ai/user-upload-image/gpt_image_generated/8b492264-1196-48bb-adc2-30a8453b7770_wm"/>
+                    <h2 class="text-xl font-semibold text-slate-700 mb-1">あやとお話ししよう！</h2>
+                    <p class="text-xs text-pink-600 font-medium mb-2">あなたの専属アシスタント！</p>
+                     <a href="{% url 'ai_assistant_app:ai_chat' character_id=1 %}" {# 仮でキャラID1にリンク #}
+                        class="w-full mt-4 flex items-center justify-center gap-2 
+                               bg-pink-500 hover:bg-pink-600
+                               text-white font-semibold py-2.5 px-4 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 ease-in-out transform hover:scale-105 text-sm">
+                        <span class="material-symbols-outlined text-base">chat_bubble</span>
+                        あやとチャット
+                    </a>
+                </section>
+
+                {# --- クイックリンク (変更なし) --- #}
+                <section class="bg-white p-6 rounded-xl shadow-lg card-item">
+                    <h2 class="text-xl font-semibold text-slate-700 mb-4">クイックリンク</h2>
+                    <div class="grid grid-cols-2 gap-3">
+                        <a class="quick-link-card group flex flex-col items-center justify-center p-3 bg-slate-100 hover:bg-sky-100 rounded-lg transition-all duration-200 ease-in-out text-xs sm:text-sm" href="{% url 'calendar_app:monthly_calendar_today' %}">
+                            <span class="material-symbols-outlined text-2xl sm:text-3xl text-sky-500 group-hover:text-sky-600 mb-1 transition-colors">calendar_month</span>
+                            <span class="font-medium text-slate-700 group-hover:text-sky-700 transition-colors text-center">カレンダー<br class="hidden sm:inline">全体</span>
+                        </a>
+                        <a class="quick-link-card group flex flex-col items-center justify-center p-3 bg-slate-100 hover:bg-purple-100 rounded-lg transition-all duration-200 ease-in-out text-xs sm:text-sm" href="{% url 'accounts:friend_list' %}">
+                            <span class="material-symbols-outlined text-2xl sm:text-3xl text-purple-500 group-hover:text-purple-600 mb-1 transition-colors">groups</span>
+                            <span class="font-medium text-slate-700 group-hover:text-purple-700 transition-colors text-center">友達<br class="hidden sm:inline">管理</span>
+                        </a>
+                         <a class="quick-link-card group flex flex-col items-center justify-center p-3 bg-slate-100 hover:bg-rose-100 rounded-lg transition-all duration-200 ease-in-out text-xs sm:text-sm" href="{% url 'accounts:logout' %}" onclick="event.preventDefault(); document.getElementById('logout-form-quicklink-dashboard-3').submit();">
+                            <span class="material-symbols-outlined text-2xl sm:text-3xl text-rose-500 group-hover:text-rose-600 mb-1 transition-colors">logout</span>
+                            <span class="font-medium text-slate-700 group-hover:text-rose-700 transition-colors">ログアウト</span>
+                        </a>
+                        <form id="logout-form-quicklink-dashboard-3" action="{% url 'accounts:logout' %}" method="POST" style="display: none;">
+                            {% csrf_token %}
+                        </form>
+                        <div class="quick-link-card group flex flex-col items-center justify-center p-3 bg-gray-200 rounded-lg text-gray-400 cursor-not-allowed text-xs sm:text-sm" title="近日公開予定！">
+                            <span class="material-symbols-outlined text-2xl sm:text-3xl mb-1">construction</span>
+                            <span class="font-medium text-center">その他<br class="hidden sm:inline">機能</span>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# --- ✨✨ ここからが新しいJavaScriptだよ！ ✨✨ --- #}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 必要なHTML要素をぜんぶ集めるよ！
+    const calendarContainer = document.getElementById('calendar-goes-here');
+    const scheduleListContainer = document.getElementById('schedule-list-for-date');
+    const selectedDateDisplay = document.getElementById('selected-date-display');
+    
+    // Pythonから渡された月の予定データをJavaScriptの魔法で使えるようにするよ
+    let monthSchedules = [];
+    try {
+        monthSchedules = JSON.parse('{{ schedules_for_month_json|escapejs }}');
+    } catch (e) {
+        console.error("月の予定データの解析に失敗しちゃった…:", e);
+    }
+
+    // 今日の日付を覚えておくよ
+    const today = new Date();
+    const todayYear = today.getFullYear();
+    const todayMonth = today.getMonth() + 1;
+    const todayDay = today.getDate();
+
+    // 🌟 メインの魔法！指定された日の予定を描画する関数 🌟
+    function renderSchedulesForDate(year, month, day) {
+        // 必要な要素がなかったら、何もしないで終了！
+        if (!scheduleListContainer || !selectedDateDisplay) return;
+        
+        // まずは予定リストを空っぽにするよ
+        scheduleListContainer.innerHTML = '';
+        
+        // 「〇月〇日」の部分を更新するよ
+        if (year === todayYear && month === todayMonth && day === todayDay) {
+            selectedDateDisplay.textContent = '今日';
+        } else {
+            selectedDateDisplay.textContent = `${month}月${day}日`;
+        }
+
+        // 月の予定の中から、クリックされた日の予定だけを探し出すよ
+        const schedulesOnDay = monthSchedules.filter(schedule => 
+            schedule.year === year && schedule.month === month && schedule.day === day
+        );
+
+        // 予定があったら、リストにして表示するよ
+        if (schedulesOnDay.length > 0) {
+            const ul = document.createElement('ul');
+            ul.className = 'space-y-3';
+            schedulesOnDay.forEach(schedule => {
+                const li = document.createElement('li');
+                li.className = 'schedule-item-card flex items-start gap-3 p-3 border border-slate-100 rounded-md hover:bg-slate-50 transition-all';
+                
+                // 予定のタイトルに合わせてアイコンを変えてみる（おまけ機能！）
+                let iconName = 'event'; // 基本は普通のイベントアイコン
+                if (schedule.title.includes('仕事') || schedule.title.includes('ミーティング')) iconName = 'work';
+                else if (schedule.title.includes('ヨガ') || schedule.title.includes('運動')) iconName = 'self_improvement';
+                else if (schedule.title.includes('ランチ') || schedule.title.includes('食事')) iconName = 'restaurant';
+                else if (schedule.title.includes('デート') || schedule.title.includes('記念日')) iconName = 'favorite'; // きゃ///
+
+                // HTMLを組み立てるよ！
+                li.innerHTML = `
+                    <div class="p-1.5 bg-blue-100 text-blue-600 rounded-full mt-1 flex-shrink-0">
+                        <span class="material-symbols-outlined text-base">${iconName}</span>
+                    </div>
+                    <div class="flex-grow">
+                        <h4 class="font-medium text-slate-700 text-sm">${schedule.title}</h4>
+                        <p class="text-xs text-slate-500">${schedule.start_time} - ${schedule.end_time}</p>
+                        ${schedule.location ? `<p class="text-xs text-slate-400 flex items-center gap-1 mt-1"><span class="material-symbols-outlined text-xs">location_on</span>${schedule.location}</p>` : ''}
+                    </div>
+                    <a href="${schedule.detail_url}" class="ml-auto text-blue-500 hover:text-blue-700 text-xs self-center font-medium">詳細</a>
+                `;
+                ul.appendChild(li);
+            });
+            scheduleListContainer.appendChild(ul);
+        } else {
+            // 予定がなかったら、「ないよー」って表示する
+            scheduleListContainer.innerHTML = '<div class="text-slate-500 text-sm text-center py-8"><span class="material-symbols-outlined text-4xl text-slate-300 block mx-auto mb-2">event_busy</span><p>この日の予定はありません。</p></div>';
+        }
+    }
+
+    // 🌟 カレンダーの日付がクリックされた時の魔法！ 🌟
+    function handleDayClick(event) {
+        // クリックされたのが日付マスじゃなかったら無視！
+        const targetCell = event.target.closest('.day-cell');
+        if (!targetCell) return;
+
+        // 日付マスから年・月・日の情報を抜き出すよ
+        const year = parseInt(targetCell.dataset.year);
+        const month = parseInt(targetCell.dataset.month);
+        const day = parseInt(targetCell.dataset.day);
+
+        // もし情報が取れなかったら何もしない
+        if (isNaN(year) || isNaN(month) || isNaN(day)) return;
+
+        // 今まで選択されてたマスの印を消す
+        document.querySelectorAll('#calendar-goes-here .day-cell.ring-2').forEach(div => {
+            div.classList.remove('ring-2', 'ring-blue-500', 'ring-inset');
+        });
+        
+        // クリックされたマスに新しい印をつける
+        targetCell.classList.add('ring-2', 'ring-blue-500', 'ring-inset');
+        
+        // 最後に、その日の予定を表示するメインの魔法を呼び出す！
+        renderSchedulesForDate(year, month, day);
+    }
+
+    // カレンダー全体に「クリックを待つ」魔法をかける！
+    if (calendarContainer) {
+        calendarContainer.addEventListener('click', handleDayClick);
+        
+        // ページが読み込まれた時に、今日の予定を最初に表示しておく
+        const currentCalYear = parseInt('{{ current_year }}');
+        const currentCalMonth = parseInt('{{ current_month }}');
+        
+        if (currentCalYear === todayYear && currentCalMonth === todayMonth) {
+            // もし表示してるカレンダーが今月だったら…
+            renderSchedulesForDate(todayYear, todayMonth, todayDay);
+            // 今日のマスを探して、自動でクリックされた状態にしとく
+            const todayCell = calendarContainer.querySelector(`.day-cell.today-cell`);
+            if (todayCell) {
+                todayCell.classList.add('ring-2', 'ring-blue-500', 'ring-inset');
+            }
+        } else {
+            // もし違う月を表示してたら、「クリックしてね」ってメッセージを出す
+            scheduleListContainer.innerHTML = '<div class="text-slate-500 text-sm text-center py-8"><span class="material-symbols-outlined text-4xl text-slate-300 block mx-auto mb-2">touch_app</span><p>カレンダーの日付を<br>クリックしてください。</p></div>';
+        }
+    }
+    
+    // 🌟 月移動ボタンの魔法！ 🌟
+    document.querySelectorAll('button[data-cal-nav]').forEach(button => {
+        button.addEventListener('click', function() {
+            const navDirection = this.dataset.calNav;
+            // 表示中の年月をPythonから受け取る
+            let targetYear = parseInt('{{ current_year }}');
+            let targetMonth = parseInt('{{ current_month }}');
+
+            if (navDirection === 'prev') { // 「前へ」ボタン
+                targetMonth--;
+                if (targetMonth < 1) { targetMonth = 12; targetYear--; }
+            } else if (navDirection === 'next') { // 「次へ」ボタン
+                targetMonth++;
+                if (targetMonth > 12) { targetMonth = 1; targetYear++; }
+            }
+            // 計算した年月のURLにページを移動させる！
+            window.location.href = `{% url 'dashboard_top_page' %}?year=${targetYear}&month=${targetMonth}`; 
+        });
+    });
+});
+</script>
+{# --- ✨✨ JavaScriptはここまで！ ✨✨ --- #}
+{% endblock %}

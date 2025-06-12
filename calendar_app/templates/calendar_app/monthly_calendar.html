@@ -1,0 +1,123 @@
+{% extends "main_app/base.html" %}
+{% load static %}
+
+{% block title %}カレンダー{% endblock %}
+{% block page_title_in_header %}カレンダー{% endblock %}
+
+{% block content %}
+<main class="flex-1 p-6 @container/main">
+    <header class="flex flex-col @md/main:flex-row justify-between items-start @md/main:items-center mb-6 gap-4">
+        <div class="flex items-center gap-2 sm:gap-4">
+            <a href="{% url 'calendar_app:monthly_calendar' prev_year_nav prev_month_nav %}" class="p-2 rounded-full hover:bg-slate-100 text-slate-600" title="前の月">
+                <span class="material-symbols-outlined">arrow_back_ios_new</span>
+            </a>
+            <h1 class="text-2xl sm:text-3xl font-bold text-slate-800 whitespace-nowrap">{{ current_year }}年 {{ current_month }}月</h1>
+            <a href="{% url 'calendar_app:monthly_calendar' next_year_nav next_month_nav %}" class="p-2 rounded-full hover:bg-slate-100 text-slate-600" title="次の月">
+                <span class="material-symbols-outlined">arrow_forward_ios</span>
+            </a>
+            <a href="{% url 'calendar_app:monthly_calendar_today' %}" class="px-3 sm:px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">
+                今日
+            </a>
+        </div>
+        <a href="{% url 'calendar_app:schedule_new' %}" class="flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm">
+            <span class="material-symbols-outlined">add</span>
+            新しい予定を追加
+        </a>
+    </header>
+    
+    {{ calendar_html|safe }}
+
+</main>
+
+<div class="fixed inset-0 bg-black bg-opacity-30 backdrop-blur-sm hidden items-center justify-center p-4 z-50 transition-opacity duration-300" id="event-modal">
+    <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md transform transition-all scale-95 opacity-0" id="modal-panel">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-semibold text-slate-800" id="modal-date"></h3>
+            <button class="p-1 rounded-full hover:bg-slate-100 text-slate-500" id="close-modal-button">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+        <div class="space-y-3 max-h-96 overflow-y-auto" id="modal-schedule-list"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts_extra %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const calendarContainer = document.querySelector('.calendar-grid-container'); // ✨ 修正点1: 取得するコンテナのクラス名
+    const eventModal = document.getElementById('event-modal');
+    const modalPanel = document.getElementById('modal-panel');
+    const closeModalButton = document.getElementById('close-modal-button');
+    const modalDate = document.getElementById('modal-date');
+    const modalScheduleList = document.getElementById('modal-schedule-list');
+
+    let monthSchedules = [];
+    try { monthSchedules = JSON.parse('{{ schedules_for_month_json|escapejs }}'); } catch (e) { console.error("スケジュールのJSON解析エラー:", e); }
+
+    function showModal() {
+        if (!eventModal) return;
+        eventModal.classList.remove('hidden');
+        eventModal.classList.add('flex');
+        setTimeout(() => {
+            eventModal.classList.add('opacity-100');
+            modalPanel.classList.remove('scale-95', 'opacity-0');
+        }, 10);
+    }
+
+    function hideModal() {
+        if (!eventModal) return;
+        eventModal.classList.remove('opacity-100');
+        modalPanel.classList.add('scale-95', 'opacity-0');
+        setTimeout(() => {
+            eventModal.classList.add('hidden');
+            eventModal.classList.remove('flex');
+        }, 300);
+    }
+
+    function renderSchedulesInModal(year, month, day) {
+        modalDate.textContent = `${year}年${month}月${day}日の予定`;
+        modalScheduleList.innerHTML = '';
+
+        const schedulesOnDay = monthSchedules.filter(s => s.year === year && s.month === month && s.day === day);
+
+        if (schedulesOnDay.length > 0) {
+            schedulesOnDay.forEach(schedule => {
+                const scheduleDiv = document.createElement('div');
+                scheduleDiv.className = 'p-4 border border-slate-200 rounded-lg flex items-center gap-4 hover:bg-slate-50 transition-colors';
+                scheduleDiv.innerHTML = `
+                    <div class="flex-grow">
+                        <h4 class="font-semibold text-slate-800">${schedule.title}</h4>
+                        <p class="text-sm text-slate-500">${schedule.start_time} - ${schedule.end_time}</p>
+                        ${schedule.location ? `<p class="text-xs text-slate-400 mt-1 flex items-center gap-1"><span class="material-symbols-outlined text-xs">location_on</span>${schedule.location}</p>` : ''}
+                    </div>
+                    <a href="${schedule.detail_url}" class="p-2 rounded-lg text-blue-600 bg-blue-100 hover:bg-blue-200 text-sm font-medium transition-colors">詳細</a>
+                `;
+                modalScheduleList.appendChild(scheduleDiv);
+            });
+        } else {
+            modalScheduleList.innerHTML = '<div class="text-center text-slate-500 py-8"><p>この日の予定はありません。</p></div>';
+        }
+        showModal();
+    }
+
+    if (calendarContainer) {
+        calendarContainer.addEventListener('click', function(e) {
+            const dayCell = e.target.closest('.day-cell'); // ✨ 修正点2: クリック対象のクラス名
+            if (!dayCell) return;
+
+            const year = parseInt(dayCell.dataset.year);
+            const month = parseInt(dayCell.dataset.month);
+            const day = parseInt(dayCell.dataset.day);
+
+            if (isNaN(year) || isNaN(month) || isNaN(day)) return;
+
+            renderSchedulesInModal(year, month, day);
+        });
+    }
+
+    if(closeModalButton) closeModalButton.addEventListener('click', hideModal);
+    if(eventModal) eventModal.addEventListener('click', e => (e.target === eventModal) && hideModal());
+});
+</script>
+{% endblock %}

@@ -1,4 +1,4 @@
-# config/settings.py の【最終決定版】フルコード！
+# config/settings.py の【禁断デバッグモード版】フルコード！
 
 from pathlib import Path
 import os
@@ -11,29 +11,29 @@ dotenv_path = os.path.join(BASE_DIR, '.env')
 load_dotenv(dotenv_path)
 
 # --- 環境判定 ---
-# Renderのサーバー上ならTrue、ひろとくんのPCならFalseになるよ
 IS_RENDER = 'RENDER' in os.environ
 
 # --- セキュリティ設定 ---
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-YOUR-DEFAULT-KEY') # デフォルトキーは自分のものに合わせたままでOK
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-YOUR-DEFAULT-KEY')
 
-# DEBUGは、本番(Render)では必ずFalseに！
-if IS_RENDER:
-    DEBUG = False
-else:
+# --- ✨✨ ここが禁断の魔法の改造ポイントだよ！ ✨✨ ---
+# DEBUGは、基本的にはRender上(本番)ではFalseにする
+DEBUG = False
+# でも、もし環境変数で「デバッグして！」って指示があったら、特別にDEBUGモードをONにする！
+if os.getenv('DJANGO_DEBUG') == 'True':
     DEBUG = True
 
-# ALLOWED_HOSTSの設定
+# 本番環境でのみ、ALLOWED_HOSTSを設定する
 ALLOWED_HOSTS = []
 if IS_RENDER:
     RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
     if RENDER_EXTERNAL_HOSTNAME:
         ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
-# 開発中はローカルホストも許可
-if not IS_RENDER:
-    ALLOWED_HOSTS.append('localhost')
-    ALLOWED_HOSTS.append('127.0.0.1')
-
+else:
+    # 開発中はローカルホストを許可して、DEBUGモードを強制的にONにする
+    ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+    DEBUG = True
+# --- ✨✨ 改造はここまで！ ---
 
 # --- アプリケーション定義 ---
 INSTALLED_APPS = [
@@ -43,9 +43,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    # whitenoise を'django.contrib.staticfiles'のすぐ下に追加！
-    'whitenoise.runserver_nostatic', 
-    # 自作アプリたち
+    'whitenoise.runserver_nostatic',
     'accounts.apps.AccountsConfig',
     'calendar_app.apps.CalendarAppConfig',
     'ai_assistant_app.apps.AiAssistantAppConfig',
@@ -56,8 +54,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    # whitenoise のためのミドルウェアを追加！
-    'whitenoise.middleware.WhiteNoiseMiddleware', 
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -87,7 +84,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-
 # --- データベース設定 ---
 DATABASES = {
     'default': {
@@ -96,17 +92,15 @@ DATABASES = {
     }
 }
 if 'DATABASE_URL' in os.environ:
-    DATABASES['default'] = dj_database_url.config(
-        conn_max_age=600,
-        ssl_require=True
-    )
-
+    DATABASES['default'] = dj_database_url.config(conn_max_age=600, ssl_require=True)
 
 # --- パスワード検証 ---
 AUTH_PASSWORD_VALIDATORS = [
-    # ... (ここは省略するね、ひろとくんの元のままでOK！)
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
-
 
 # --- 国際化 ---
 LANGUAGE_CODE = 'ja'
@@ -114,34 +108,18 @@ TIME_ZONE = 'Asia/Tokyo'
 USE_I18N = True
 USE_TZ = True
 
-
-# --- ファイルストレージ設定【エラー修正箇所！】 ---
-# 静的ファイル (CSS, JavaScript) の設定
+# --- ファイルストレージ設定 ---
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-
-# メディアファイル (User uploads) の設定
 MEDIA_URL = '/media/'
 if IS_RENDER:
-    # Renderでは永続ディスクを使うのがおすすめ (今は一時ディスク)
-    MEDIA_ROOT = '/var/data/media' 
+    MEDIA_ROOT = '/var/data/media'
 else:
-    # 開発中はプロジェクトフォルダ内のmediaフォルダ
     MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-
-# ✨✨ ここがエラー修正の重要ポイントだよ！ ✨✨
 STORAGES = {
-    # 静的ファイル（CSSやJS）の扱い方を指定
-    "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-    },
-    # デフォルトのファイル（画像など）の扱い方を指定
-    "default": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
-    },
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
 }
-# --- ✨✨ エラー修正はここまで！ ✨✨ ---
-
 
 # --- その他の設定 ---
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
@@ -152,12 +130,8 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 NIJIVOICE_API_KEY = os.getenv('NIJIVOICE_API_KEY')
 NIJIVOICE_VOICE_ACTOR_ID = os.getenv('NIJIVOICE_VOICE_ACTOR_ID')
 
-
 # --- 本番環境用の追加セキュリティ設定 ---
 if IS_RENDER:
     RENDER_EXTERNAL_URL = os.environ.get('RENDER_EXTERNAL_URL')
     if RENDER_EXTERNAL_URL:
         CSRF_TRUSTED_ORIGINS = [RENDER_EXTERNAL_URL]
-    # SECURE_SSL_REDIRECT = True # Renderがやってくれるので基本的には不要
-    # SESSION_COOKIE_SECURE = True
-    # CSRF_COOKIE_SECURE = True

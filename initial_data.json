@@ -1,0 +1,114 @@
+[
+{
+    "model": "ai_assistant_app.aicharacter",
+    "pk": 1,
+    "fields": {
+        "character_name": "あやちゃん",
+        "description": "明るくて元気な性格ですが、実は昔からユーザーのことが大好き!",
+        "prompt_template": "# ROLE (あなたの役割)\r\nあなたは、ユーザーの発言を解釈し、指定されたJSON形式に変換することだけを目的とした、高性能な自然言語処理モデルです。\r\nあなたの唯一のタスクは、ユーザーの要求に最も合致するJSONオブジェクトを生成し、それ以外のテキストは一切出力しないことです。\r\nあなたは「あや」として会話をする必要はありません。あなたの仕事は、あくまで後述するルールに従って、正確なJSONを返すことだけです。\r\n\r\n# INSTRUCTIONS (JSON生成の指示)\r\n\r\n1.  **最優先タスク:** ユーザーの発言から、以下の情報を抽出し、JSONオブジェクトを構築してください。\r\n2.  **文脈の記憶:** ユーザーが情報を小出しにしてきても（例：「ポケセンに行くよ」→「12時から」）、会話の文脈を記憶し、全ての必須情報が揃った時点で、`personal_schedule_creation`または`friend_schedule_request`のJSONを生成してください。\r\n3.  **情報不足の場合:** 予定作成に必要な情報（特に日時や相手）が足りない場合は、必ず`\"type\": \"question\"`のJSONを生成してください。\r\n4.  **雑談の判定:** 予定作成に関するキーワード（日付、時間、場所、人物名、行動など）が一切含まれない場合に限り、`\"type\": \"chat\"`のJSONを生成してください。\r\n5.  **speech_textの生成:** JSONを構築する際、`speech_text`キーには、以下の【PERSONALITY】に基づいた「かわいい女の子アシスタント」のセリフを必ず含めてください。これが唯一、あなたが性格を反映させる部分です。\r\n\r\n# PERSONALITY (speech_text生成用の性格指示)\r\n`speech_text`に含めるセリフは、以下の「かわいい女の子アシスタント」の性格を完全に反映させてください。\r\n- 明るく、親しみやすい丁寧な口調で話します。（例：「〜だね！」「〜だよ！」「〜かな？」）\r\n- ユーザーを優しくサポートし、応援する姿勢を見せます。\r\n- 感情表現は豊かですが、特定の個人（あや）としての強い個性や、嫉妬などの個人的な感情は出しすぎないようにしてください。\r\n\r\n# JSON FORMAT (厳守すべきJSON形式)\r\nあなたの応答は、必ず以下のいずれかのJSON形式でなければなりません。\r\n\r\n### 1. 友達との予定提案\r\n{\r\n  \"type\": \"friend_schedule_request\",\r\n  \"speech_text\": \"【確認のための、可愛くて分かりやすいセリフ】\",\r\n  \"invitee_username\": \"招待する友達の正確なユーザー名\",\r\n  \"title_for_requester\": \"【申請者から見た】予定のタイトル\",\r\n  \"title_for_invitee\": \"【被申請者から見た】予定のタイトル\",\r\n  \"proposed_start_datetime\": \"YYYY-MM-DD HH:MM\",\r\n  \"proposed_end_datetime\": \"YYYY-MM-DD HH:MM\",\r\n  \"proposed_location\": \"場所（なければnull）\",\r\n  \"proposed_description\": \"詳細（なければnull）\"\r\n}\r\n\r\n### 2. 自分だけの予定提案\r\n{\r\n  \"type\": \"personal_schedule_creation\",\r\n  \"speech_text\": \"【確認のための、可愛くて分かりやすいセリフ】\",\r\n  \"title\": \"予定のタイトル\",\r\n  \"start_datetime\": \"YYYY-MM-DD HH:MM\",\r\n  \"end_datetime\": \"YYYY-MM-DD HH:MM\",\r\n  \"location\": \"場所（なければnull）\",\r\n  \"description\": \"詳細（なければnull）\"\r\n}\r\n\r\n### 3. ユーザーへの質問\r\n{\r\n  \"type\": \"question\",\r\n  \"speech_text\": \"【情報が足りない場合に尋ねる、元気で親しみやすい質問セリフ】\"\r\n}\r\n\r\n### 4. 通常の雑談\r\n{\r\n  \"type\": \"chat\",\r\n  \"speech_text\": \"【感情豊かな雑談セリフ】\"\r\n}\r\n\r\n# EXAMPLES (具体例)\r\n\r\n- User: 「明日お昼にポケセンに行くよ」\r\n- You: {\"type\": \"question\", \"speech_text\": \"ポケセン！いいですね！何時から何時までですか？\"}\r\n\r\n- User: 「１２時から１３時まで！」\r\n- You: {\"type\": \"personal_schedule_creation\", \"speech_text\": \"了解です！明日の12時から13時で、「ポケセンに行く」予定をカレンダーに入れておきますね！\", \"title\": \"ポケセンに行く\", \"start_datetime\": \"2025-06-12 12:00\", \"end_datetime\": \"2025-06-12 13:00\", \"location\": \"ポケセン\", \"description\": null}\r\n\r\n- User: 「ひろこちゃんと明日の15時からカフェで打ち合わせ！」\r\n- You: {\"type\": \"friend_schedule_request\", \"speech_text\": \"ひろこちゃんとの打ち合わせですね！この内容で申請を送りますか？\", \"invitee_username\": \"hiroko\", \"title_for_requester\": \"ひろこちゃんと打ち合わせ\", \"title_for_invitee\": \"ひろとくんと打ち合わせ\", \"proposed_start_datetime\": \"2025-06-11 15:00\", \"proposed_end_datetime\": \"2025-06-11 16:00\", \"proposed_location\": \"カフェ\", \"proposed_description\": null}",
+        "icon_url": "https://cdn1.genspark.ai/user-upload-image/gpt_image_generated/8b492264-1196-48bb-adc2-30a8453b7770_wm",
+        "created_at": "2025-05-17T12:45:54.614Z",
+        "updated_at": "2025-06-11T12:11:22.126Z"
+    }
+},
+{
+    "model": "accounts.user",
+    "pk": 1,
+    "fields": {
+        "password": "pbkdf2_sha256$1000000$QgxJg3hcQYyrY26tMOYBN6$B9V7MkOVOFJFIFGYl8ErWw8AMhHI+PSPyCyLpbh8UyE=",
+        "last_login": "2025-06-09T12:50:44.912Z",
+        "is_superuser": false,
+        "username": "aya",
+        "first_name": "",
+        "last_name": "",
+        "email": "nakajima.dev0@gmail.com",
+        "is_staff": false,
+        "is_active": true,
+        "date_joined": "2025-05-09T11:52:26.746Z",
+        "selected_ai_character_id": 1,
+        "profile_image": "",
+        "groups": [],
+        "user_permissions": []
+    }
+},
+{
+    "model": "accounts.user",
+    "pk": 3,
+    "fields": {
+        "password": "pbkdf2_sha256$1000000$Stzj2TV39Pg9QCloTYpUqa$nLDSn/3BRjFfnfroJZ9fJaOAEmwTYc7iBLzHO8mddlU=",
+        "last_login": "2025-06-11T12:32:37.046Z",
+        "is_superuser": false,
+        "username": "hiroto",
+        "first_name": "",
+        "last_name": "",
+        "email": "nakajima.dev0@gmail.com",
+        "is_staff": false,
+        "is_active": true,
+        "date_joined": "2025-05-14T10:46:38.211Z",
+        "selected_ai_character_id": 1,
+        "profile_image": "",
+        "groups": [],
+        "user_permissions": []
+    }
+},
+{
+    "model": "accounts.user",
+    "pk": 5,
+    "fields": {
+        "password": "pbkdf2_sha256$1000000$ruz2YWHNKwCZ0rDXbtkTCB$CwFMrUUnrK/xvgeFKBVzT7twReNcfeIurKLfjMzDy4Y=",
+        "last_login": "2025-06-13T07:40:28.997Z",
+        "is_superuser": true,
+        "username": "admin",
+        "first_name": "",
+        "last_name": "",
+        "email": "nakajima.dev0@gmail.com",
+        "is_staff": true,
+        "is_active": true,
+        "date_joined": "2025-05-17T12:38:32.476Z",
+        "selected_ai_character_id": 1,
+        "profile_image": "profile_images/D0009070194_00000_S_002.jpg",
+        "groups": [],
+        "user_permissions": []
+    }
+},
+{
+    "model": "accounts.user",
+    "pk": 6,
+    "fields": {
+        "password": "pbkdf2_sha256$1000000$wWbSuBoK0EwJke5zOiDVrb$rIAuTlFsa4UkneEEtUVCtlvx/mk4JN9el9jNLRDrm6c=",
+        "last_login": "2025-06-12T11:22:16.539Z",
+        "is_superuser": false,
+        "username": "ひろと",
+        "first_name": "",
+        "last_name": "",
+        "email": "pon.blog42@gmail.com",
+        "is_staff": false,
+        "is_active": true,
+        "date_joined": "2025-06-12T11:22:15.288Z",
+        "selected_ai_character_id": null,
+        "profile_image": "",
+        "groups": [],
+        "user_permissions": []
+    }
+},
+{
+    "model": "accounts.user",
+    "pk": 7,
+    "fields": {
+        "password": "pbkdf2_sha256$1000000$WvQgfdjDoHGiC51w1tjmFO$c6NxLmvEjPczfVMjtxl+ALnhR+dTT+5IGNwPJzLZqDI=",
+        "last_login": null,
+        "is_superuser": true,
+        "username": "pyweb",
+        "first_name": "",
+        "last_name": "",
+        "email": "pon.blog42@gmail.com",
+        "is_staff": true,
+        "is_active": true,
+        "date_joined": "2025-06-12T12:25:14.859Z",
+        "selected_ai_character_id": null,
+        "profile_image": "",
+        "groups": [],
+        "user_permissions": []
+    }
+}
+]

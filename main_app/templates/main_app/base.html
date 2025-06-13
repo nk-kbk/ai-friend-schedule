@@ -50,10 +50,11 @@
 <body class="bg-slate-50">
     <div class="flex h-screen overflow-hidden">
         
-        <!-- ✨✨ ここからが変更されたサイドバーだよ！ ✨✨ -->
-        <aside class="fixed left-0 top-0 z-40 flex h-full w-64 flex-col 
+        {# --- ✨✨ ここからがスマホ対応で変更されたサイドバーだよ！ ✨✨ --- #}
+        {# IDを追加して、スマホの時は画面左外(-translate-x-full)に隠しておくよ！ #}
+        <aside id="mobile-sidebar" class="fixed left-0 top-0 z-40 flex h-full w-64 flex-col 
                        border-r border-blue-200 bg-gradient-to-b from-blue-200 to-blue-50
-                       transition-transform duration-300 ease-in-out md:translate-x-0">
+                       -translate-x-full transition-transform duration-300 ease-in-out md:translate-x-0">
 
             <div class="flex items-center gap-3 p-6">
                 <a href="{% url 'dashboard_top_page' %}" class="flex items-center gap-3">
@@ -80,7 +81,8 @@
                 <a class="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors {% if current_url == 'user_search' %}{{ selected_class }}{% else %}{{ normal_class }}{% endif %}" href="{% url 'accounts:user_search' %}">
                     <span class="material-symbols-outlined">person_search</span>友達を探す
                 </a>
-                <a class="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors {% if current_app == 'ai_assistant_app' %}{{ selected_class }}{% else %}{{ normal_class }}{% endif %}" href="{% firstof user.selected_ai_character_id '1' as char_id_default %}{% url 'ai_assistant_app:ai_chat' character_id=char_id_default %}">
+                {# --- ✨ 修正: AIチャットのリンク先を修正。userが未選択なら1に、選択済みならそのIDに飛ぶよ！ --- #}
+                <a class="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors {% if current_app == 'ai_assistant_app' %}{{ selected_class }}{% else %}{{ normal_class }}{% endif %}" href="{% url 'ai_assistant_app:ai_chat' character_id=request.user.selected_ai_character_id|default:1 %}">
                     <span class="material-symbols-outlined">smart_toy</span>AIチャット
                 </a>
                 <a class="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors {% if current_url == 'profile' or current_url == 'profile_edit' or current_url == 'account_delete' %}{{ selected_class }}{% else %}{{ normal_class }}{% endif %}" href="{% url 'accounts:profile' %}">
@@ -112,10 +114,13 @@
             </div>
         </aside>
         
+        {# --- ✨ ここから、メインコンテンツのコンテナだよ --- #}
+        {# PCの時はサイドバーの分だけ左にずらす(md:ml-64) #}
         <div id="main-scroll-container" class="flex flex-1 flex-col overflow-y-auto md:ml-64">
-            <header id="page-header" class="sticky top-0 z-30 flex items-center justify-between whitespace-nowrap border-b border-solid border-b-slate-200 bg-slate-50/80 px-6 py-4 backdrop-blur-sm md:px-10">
+            <header id="page-header" class="sticky top-0 z-20 flex items-center justify-between whitespace-nowrap border-b border-solid border-b-slate-200 bg-slate-50/80 px-6 py-4 backdrop-blur-sm md:px-10">
                 <div class="flex items-center gap-4">
-                    <button class="text-slate-700 hover:text-slate-900 md:hidden"><span class="material-symbols-outlined">menu</span></button>
+                    {# --- ✨ ハンバーガーメニューボタンにIDを追加して、JSで動かせるようにするよ！ --- #}
+                    <button id="hamburger-button" class="text-slate-700 hover:text-slate-900 md:hidden"><span class="material-symbols-outlined">menu</span></button>
                     <h1 class="text-xl font-semibold text-slate-900">{% block page_title_in_header %}ダッシュボード{% endblock %}</h1>
                 </div>
                 <div class="flex items-center gap-4">
@@ -136,6 +141,9 @@
             <main class="flex-1">{% block content %}{% endblock %}</main>
         </div>
     </div>
+
+    {# --- ✨ サイドバー表示時に背景を暗くするオーバーレイを追加！ --- #}
+    <div id="sidebar-overlay" class="fixed inset-0 bg-black/60 z-30 hidden md:hidden"></div>
     
     {% if messages %}
     <div class="django-messages-container">
@@ -157,22 +165,42 @@
 
     <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // --- ヘッダーをスクロールで隠すおまじない (変更なし) ---
         const scrollContainer = document.getElementById('main-scroll-container');
         const header = document.getElementById('page-header');
-        
         let lastScrollTop = 0;
-
         if (scrollContainer && header) {
             scrollContainer.addEventListener('scroll', function() {
                 let scrollTop = scrollContainer.scrollTop;
-
                 if (scrollTop > lastScrollTop && scrollTop > header.offsetHeight) {
                     header.classList.add('is-hidden');
                 } else {
                     header.classList.remove('is-hidden');
                 }
-                
                 lastScrollTop = scrollTop <= 0 ? 0 : scrollTop;
+            });
+        }
+
+        // --- ✨✨ ここからがスマホ対応の新しいJavaScriptだよ！ ✨✨ ---
+        const hamburgerButton = document.getElementById('hamburger-button');
+        const sidebar = document.getElementById('mobile-sidebar');
+        const overlay = document.getElementById('sidebar-overlay');
+
+        if (hamburgerButton && sidebar && overlay) {
+            // ハンバーガーボタンがクリックされた時の処理
+            hamburgerButton.addEventListener('click', function() {
+                // サイドバーを「にゅっ」と出す/しまう
+                sidebar.classList.remove('-translate-x-full');
+                // オーバーレイを表示する
+                overlay.classList.remove('hidden');
+            });
+
+            // オーバーレイ(暗い背景)がクリックされた時の処理
+            overlay.addEventListener('click', function() {
+                // サイドバーを隠す
+                sidebar.classList.add('-translate-x-full');
+                // オーバーレイを隠す
+                overlay.classList.add('hidden');
             });
         }
     });

@@ -1,4 +1,5 @@
-# schedule_requests_app/views.py
+# schedule_requests_app/views.py の完全なコード
+
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseForbidden, JsonResponse
@@ -58,36 +59,22 @@ def respond_schedule_request_view(request, request_id, action):
                 schedule_request.status = ScheduleAdjustmentRequest.REQUEST_STATUS_ACCEPTED
                 schedule_request.responded_at = timezone.now()
                 
-                # --- ✨ここからが新しいタイトル改良の魔法だよ！✨ ---
-                
-                # 1. 誰が見ても分かりやすい、共有のタイトルを作る！
-                #    申請者用タイトルから、相手の名前を抜いた「用件」部分だけを取り出す
-                #    例：「ひろとくんとマック」 -> 「とマック」 -> 「マック」
                 base_title = schedule_request.title_for_requester.replace(schedule_request.invitee.username, '').replace('と', '').strip()
-                # 二人の名前をくっつけて、新しいタイトルを作る！
                 shared_title = f"{schedule_request.requester.username}と{schedule_request.invitee.username}の{base_title}"
-
-                # 2. 参加者リストを作成
                 participants_to_add = [schedule_request.requester, schedule_request.invitee]
                 
-                # 3. ひとつの共有スケジュールを、新しい共有タイトルで作る！
                 new_schedule = Schedule.objects.create(
                     created_by_user=schedule_request.requester, 
-                    title=shared_title, # ✨ 新しいタイトルを使う！
+                    title=shared_title,
                     start_datetime=schedule_request.proposed_start_datetime,
                     end_datetime=schedule_request.proposed_end_datetime,
                     location=schedule_request.proposed_location,
                     description=f"AIによる日程調整で決定した予定です。\n元々のAI提案メモ: {schedule_request.proposed_description or '特になし'}"
                 )
-                # 4. 作成した予定に、参加者をまとめて登録！
                 new_schedule.participants.set(participants_to_add)
-                
-                # 5. 申請レコードに、作成された予定を紐付ける
                 schedule_request.related_schedule = new_schedule
                 schedule_request.save()
-                # --- ✨魔法はここまで！✨ ---
 
-                # 6. 申請者にお知らせを送信
                 notification_message = f"{schedule_request.invitee.username}さんが「{schedule_request.title_for_requester}」の申請を承認しました！"
                 Notification.objects.create(
                     user=schedule_request.requester,
@@ -104,7 +91,6 @@ def respond_schedule_request_view(request, request_id, action):
             traceback.print_exc()
 
     elif action == 'decline':
-        # (拒否の処理は変更なしだよ！)
         try:
             with transaction.atomic():
                 schedule_request.status = ScheduleAdjustmentRequest.REQUEST_STATUS_DECLINED
@@ -127,10 +113,10 @@ def respond_schedule_request_view(request, request_id, action):
     return redirect('schedule_requests_app:schedule_request_detail', request_id=schedule_request.id)
 
 
+# --- ✨✨ ここからが修正されたビューだよ！ ✨✨ ---
 @login_required
 @require_POST
 def create_schedule_request_from_ai_view(request):
-    # (このビューは変更なしでOKだよ！)
     try:
         data = json.loads(request.body)
 
@@ -143,8 +129,22 @@ def create_schedule_request_from_ai_view(request):
         except User.DoesNotExist:
             return JsonResponse({'status': 'error', 'message': f"お友達「{data['invitee_username']}」が見つかりませんでした。"}, status=404)
 
-        start_dt_naive = datetime.strptime(data['proposed_start_datetime'], '%Y-%m-%d %H:%M')
-        end_dt_naive = datetime.strptime(data['proposed_end_datetime'], '%Y-%m-%d %H:%M')
+        # AIがどんなフォーマットで日時を返してきても、柔軟に受け取れるようにする魔法！
+        def parse_flexible_datetime(dt_string):
+            # まずは基本のフォーマット「YYYY-MM-DD HH:MM」を試す
+            try:
+                return datetime.strptime(dt_string, '%Y-%m-%d %H:%M')
+            except ValueError:
+                # もしダメなら、秒付きの「YYYY-MM-DD HH:MM:SS」を試す
+                try:
+                    return datetime.strptime(dt_string, '%Y-%m-%d %H:%M:%S')
+                except ValueError:
+                     # それでもダメなら、エラーを発生させる
+                    raise ValueError(f"'{dt_string}' はどの想定フォーマットにも一致しませんでした。")
+
+        start_dt_naive = parse_flexible_datetime(data['proposed_start_datetime'])
+        end_dt_naive = parse_flexible_datetime(data['proposed_end_datetime'])
+
         if end_dt_naive <= start_dt_naive:
             return JsonResponse({'status': 'error', 'message': '終了日時は開始日時より後にする必要があります。'}, status=400)
             
@@ -176,8 +176,8 @@ def create_schedule_request_from_ai_view(request):
             'message': f"{invitee_user.username}さんに「{new_request.title_for_requester}」の日程調整申請を送りました！"
         })
 
-    except (ValueError, TypeError):
-        return JsonResponse({'status': 'error', 'message': '日時の形式が正しくありません。'}, status=400)
+    except (ValueError, TypeError) as e:
+        return JsonResponse({'status': 'error', 'message': f'日時の形式が正しくありません: {e}'}, status=400)
     except Exception as e:
         traceback.print_exc()
-        return JsonResponse({'status': 'error', 'message': '申請の作成中にエラーが発生しました。'}, status=500)
+        return JsonResponse({'status': 'error', 'message': f'申請の作成中にエラーが発生しました: {e}'}, status=500)

@@ -1,4 +1,4 @@
-# ai_assistant_app/views.py の【最終解決・ダウンロード方式】フルコード！
+# ai_assistant_app/views.py の完全なコード
 
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
@@ -16,15 +16,15 @@ from django.utils.html import json_script
 import requests
 import os
 import uuid
-# import base64 # Base64は使わなくなったから、消してもいいよ！
 
-# --- Gemini AIの設定 ---
+# ✨ pytz をインポートして、タイムゾーンの魔法を使えるようにする！
+import pytz
+
 if settings.GEMINI_API_KEY:
     genai.configure(api_key=settings.GEMINI_API_KEY)
 else:
     print("警告: GEMINI_API_KEYが設定されていません。")
 
-# --- ai_chat_view (変更なし) ---
 @login_required
 @require_GET
 def ai_chat_view(request, character_id):
@@ -52,7 +52,7 @@ def ai_chat_view(request, character_id):
     }
     return render(request, 'ai_assistant_app/chat_interface.html', context)
 
-# --- send_message_to_ai_view (JSONからダウンロードURLを取得する最終版) ---
+
 @login_required
 @require_POST
 def send_message_to_ai_view(request, character_id):
@@ -78,14 +78,29 @@ def send_message_to_ai_view(request, character_id):
         history_for_ai_list = [f"{'AI' if h.sender_type == 'ai' else 'User'}: {h.message_text.split('<!--')[0].strip()}" for h in reversed(db_chat_history)]
         history_for_ai = "\n".join(history_for_ai_list)
         
+        # --- ✨✨ ここが最終・確定の修正ポイント！ ✨✨ ---
+        # 1. UTC（世界の基準時間）で、今の時間を取得
+        utc_now = timezone.now()
+        # 2. 日本のタイムゾーン情報を取得
+        jst = pytz.timezone('Asia/Tokyo')
+        # 3. UTCの時間を、日本の時間に変換！
+        jst_now = utc_now.astimezone(jst)
+        # 4. AIに教えるために、日本の時間を文字列に変換
+        now_str_for_ai = jst_now.strftime('%Y-%m-%d %H:%M')
+
+        # ユーザーからのメッセージの直前に、正しい日本の現在時刻の情報を叩き込む！
         final_prompt_for_ai = (
-            f"これはユーザーとの過去の会話履歴です:\n---\n{history_for_ai}\n---\n"
-            f"この会話の文脈を踏まえて、ユーザーの最新の発言「{user_message_text}」に最も適切に応答するJSONを生成してください。"
+            f"過去の会話履歴:\n---\n{history_for_ai}\n---\n"
+            f"【最重要指示】現在の日時は {now_str_for_ai} です。これを厳密な基準として、ユーザーの次の発言を解釈してください。\n"
+            f"ユーザーの最新の発言:「{user_message_text}」"
         )
 
         model = genai.GenerativeModel('gemini-1.5-pro-latest', system_instruction=ai_character.prompt_template)
+        # --- ✨✨ 改良ポイントはここまで！ ✨✨ ---
+
         generation_config = genai.types.GenerationConfig(response_mime_type="application/json")
         response = model.generate_content(final_prompt_for_ai, generation_config=generation_config)
+        
         ai_json_response = json.loads(response.text)
         speech_text = ai_json_response.get('speech_text', '')
         text_for_speech = speech_text.replace('///', '…')
@@ -93,52 +108,27 @@ def send_message_to_ai_view(request, character_id):
         audio_url = None
         if settings.NIJIVOICE_API_KEY and settings.NIJIVOICE_VOICE_ACTOR_ID and text_for_speech:
             try:
-                # ステップ１：ダウンロードURLを取得する
                 url_for_getting_dl_url = f"https://api.nijivoice.com/api/platform/v1/voice-actors/{settings.NIJIVOICE_VOICE_ACTOR_ID}/generate-voice"
                 headers = {"accept": "application/json", "Content-Type": "application/json", "x-api-key": settings.NIJIVOICE_API_KEY}
                 payload = {"script": text_for_speech, "speed": "1.0", "format": "mp3"}
-                
-                print(f"--- [ステップ1] にじボイスAPIへリクエスト ---")
                 response_for_url = requests.post(url_for_getting_dl_url, headers=headers, data=json.dumps(payload))
                 response_for_url.raise_for_status()
-                
                 response_json = response_for_url.json()
-                print(f"--- [ステップ1] にじボイスAPIからのJSONレスポンス ---")
-                print(response_json)
-
-                # ステップ２：JSONの中からダウンロードURLを取り出す
                 download_url = response_json.get('generatedVoice', {}).get('audioFileDownloadUrl')
-                
                 if not download_url:
                     raise Exception("JSONレスポンスにダウンロードURLが含まれていません。")
-                
-                print(f"--- [ステップ2] 音声ダウンロードURLを取得 ---")
-                print(f"URL: {download_url}")
-
-                # ステップ３：そのURLにアクセスして、音声データをダウンロードする
-                print(f"--- [ステップ3] 音声データのダウンロードを開始 ---")
                 response_audio_content = requests.get(download_url)
                 response_audio_content.raise_for_status()
-                print(f"--- [ステップ3] 音声データのダウンロード完了 ---")
-
-                # ステップ４：ダウンロードしたデータをファイルに保存する
                 audio_folder = os.path.join(settings.MEDIA_ROOT, 'audio')
                 os.makedirs(audio_folder, exist_ok=True)
                 filename = f"{uuid.uuid4()}.mp3"
                 filepath = os.path.join(audio_folder, filename)
-                
                 with open(filepath, "wb") as out:
                     out.write(response_audio_content.content)
-                print(f"--- [ステップ4] 音声ファイルを保存しました ---")
-                print(f"パス: {filepath}")
-                
                 audio_url = os.path.join(settings.MEDIA_URL, 'audio', filename).replace('\\', '/')
-                
             except Exception as e:
                 print(f"--- にじボイスAPI処理中にエラー発生！ ---")
                 print(f"エラー内容: {e}")
-        else:
-             print("--- 音声合成はスキップされました ---")
 
         text_to_save_and_send = f"{speech_text}<!-- SCHEDULE_PROPOSAL_DATA_START -->{json.dumps(ai_json_response)}<!-- SCHEDULE_PROPOSAL_DATA_END -->"
 
@@ -150,9 +140,6 @@ def send_message_to_ai_view(request, character_id):
 
         final_audio_url = request.build_absolute_uri(audio_url) if audio_url else None
         
-        print("--- フロントエンドに返す最終音声URL ---")
-        print(f"最終URL: {final_audio_url}")
-
         return JsonResponse({
             'reply': text_to_save_and_send,
             'audio_url': final_audio_url
@@ -162,6 +149,7 @@ def send_message_to_ai_view(request, character_id):
         traceback.print_exc()
         user_error_message = 'ごめんね！AIとの会話中に予期せぬエラーが発生しちゃったみたい…。'
         return JsonResponse({'error': user_error_message}, status=500)
+
 
 @login_required
 @require_POST

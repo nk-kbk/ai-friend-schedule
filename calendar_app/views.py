@@ -1,16 +1,15 @@
-# calendar_app/views.py の修正後コード
+# calendar_app/views.py の完全なコード
 
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse
-import json
+from django.http import JsonResponse, Http404
 from django.views.decorators.http import require_POST
 from django.conf import settings
 from django.utils import timezone
 import calendar as py_calendar
 from datetime import date, timedelta, datetime
 from django.utils.safestring import mark_safe
-from .forms import ScheduleForm
+from .forms import ScheduleForm # ScheduleForm を使うのでインポート！
 from .models import Schedule
 from django.urls import reverse_lazy, reverse
 import re
@@ -18,42 +17,28 @@ import traceback
 from django.db.models import Q
 from django.contrib import messages
 from django.db import transaction
-from django.views.decorators.http import require_POST
+from django.utils.html import escape
 import json
-from django.utils import timezone
-from datetime import datetime
-import traceback
-from django.http import JsonResponse, Http404 
-from django.utils.html import escape # ✨ HTMLエスケープのために追加するよ！
 
-# --- ✨✨ ここからが新しいDivCalendarクラスだよ！ ✨✨ ---
+# --- DivCalendarクラス (ここは変更なし！) ---
 class DivCalendar:
-    """
-    月間カレンダーを<div>で生成するクラス。
-    is_dashboardフラグで、ダッシュボード用と詳細ページ用の表示を切り替えるよ！
-    """
     def __init__(self, year, month, schedules_for_month, firstweekday=6, is_dashboard=False):
         self.year = year
         self.month = month
         self.schedules_by_day = {}
         for schedule in schedules_for_month:
-            # タイムゾーンを考慮して、ローカル時間の日付を取得
             day_num = timezone.localtime(schedule.start_datetime).day
             if day_num not in self.schedules_by_day:
                 self.schedules_by_day[day_num] = []
             self.schedules_by_day[day_num].append(schedule)
-            
         self.firstweekday = firstweekday
-        self.is_dashboard = is_dashboard # ダッシュボード用かどうかのフラグ
-        py_calendar.setfirstweekday(firstweekday) # 週の始まりを設定
+        self.is_dashboard = is_dashboard
+        py_calendar.setfirstweekday(firstweekday)
         self.month_cal = py_calendar.monthcalendar(year, month)
 
     def formatmonth(self):
         cal_html = '<div class="grid grid-cols-7 gap-px bg-slate-200 border border-slate-200 rounded-lg overflow-hidden shadow-sm calendar-grid-container">\n'
-        
-        # 曜日のヘッダー（英語）
         day_names_en = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-        # 週の始まりに合わせて並び替え
         ordered_day_names = day_names_en[self.firstweekday:] + day_names_en[:self.firstweekday]
         
         for day_name in ordered_day_names:
@@ -63,52 +48,39 @@ class DivCalendar:
         for week in self.month_cal:
             for day in week:
                 if day == 0:
-                    # 月の範囲外の日
                     cal_html += '  <div class="bg-slate-50/70 min-h-[8rem]"></div>\n'
                 else:
                     current_date = date(self.year, self.month, day)
                     schedules_on_day = self.schedules_by_day.get(day, [])
-                    
                     css_classes = ["relative p-2 h-32 overflow-hidden transition-colors day-cell"]
-                    # 詳細ページではクリックでモーダルを出すので cursor-pointer をつける
                     if not self.is_dashboard:
                         css_classes.append("cursor-pointer")
-
                     is_today = (current_date == today)
                     if is_today:
-                        css_classes.append("bg-blue-100/50 today-cell") # 今日のマスのスタイル
+                        css_classes.append("bg-blue-100/50 today-cell")
                     else:
                         css_classes.append("bg-white hover:bg-slate-50")
-
                     cal_html += f'  <div class="{" ".join(css_classes)}" data-year="{self.year}" data-month="{self.month}" data-day="{day}">\n'
-                    
-                    # 日付の数字部分のスタイル
                     num_css_classes = ["text-sm"]
                     if is_today:
                         num_css_classes.append("absolute top-1.5 right-1.5 size-7 flex items-center justify-center font-semibold text-white bg-blue-500 rounded-full")
                     else:
-                        if current_date.weekday() == 5: # 土曜日
+                        if current_date.weekday() == 5:
                            num_css_classes.append("text-blue-700")
-                        elif current_date.weekday() == 6: # 日曜日
+                        elif current_date.weekday() == 6:
                             num_css_classes.append("text-red-600")
                         else:
                             num_css_classes.append("text-slate-700")
-
                     cal_html += f'    <span class="{" ".join(num_css_classes)}">{day}</span>\n'
-                    
-                    # 予定表示部分
                     if schedules_on_day:
                         if self.is_dashboard:
-                            # --- ダッシュボード用の表示（小さな点） ---
                             cal_html += '    <div class="absolute bottom-2 right-2 flex flex-wrap-reverse gap-1 justify-end">\n'
-                            for _ in schedules_on_day[:4]: # 最大4つまで
+                            for _ in schedules_on_day[:4]:
                                  cal_html += '      <div class="h-1.5 w-1.5 rounded-full bg-blue-600 opacity-80"></div>\n'
                             cal_html += '    </div>\n'
                         else:
-                            # --- カレンダー詳細ページ用の表示（帯状） ---
                             cal_html += '    <div class="mt-4 space-y-1">\n'
-                            for schedule in schedules_on_day[:3]: # 最大3つまで
-                                # タイトルを安全にエスケープして、長すぎる場合は省略
+                            for schedule in schedules_on_day[:3]:
                                 title_text = escape(schedule.title)
                                 if len(title_text) > 10:
                                     title_text = title_text[:9] + '…'
@@ -116,20 +88,13 @@ class DivCalendar:
                                 cal_html += f'<a href="{reverse("calendar_app:schedule_detail", args=[schedule.id])}" class="block p-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 truncate" title="{escape(schedule.title)}">'
                                 cal_html += f'<span>{start_time}</span> {title_text}'
                                 cal_html += '</a>\n'
-
-                            # 4件以上ある場合は「他〇件」と表示
                             if len(schedules_on_day) > 3:
                                 remaining = len(schedules_on_day) - 3
                                 cal_html += f'<div class="text-center text-xs text-slate-500 mt-1">他{remaining}件</div>\n'
-
                             cal_html += '    </div>\n'
-
                     cal_html += '  </div>\n'
-
         cal_html += '</div>'
         return mark_safe(cal_html)
-
-# --- ✨✨ DivCalendarクラスはここまで！ ✨✨ ---
 
 
 @login_required
@@ -167,7 +132,6 @@ def monthly_calendar_view(request, year=None, month=None):
         'detail_url': reverse('calendar_app:schedule_detail', args=[s.id])
     } for s in schedules_for_month_queryset]
 
-    # --- ✨ 修正ポイント！ is_dashboard=False を渡して「詳細カレンダー用」の表示にするよ！ ---
     cal = DivCalendar(target_year, target_month, schedules_for_month_queryset, firstweekday=6, is_dashboard=False) 
     html_cal = cal.formatmonth()
 
@@ -186,9 +150,6 @@ def monthly_calendar_view(request, year=None, month=None):
     }
     return render(request, 'calendar_app/monthly_calendar.html', context)
 
-# 
-# --- 他のビュー (schedule_new_view, schedule_detail_viewなど) は変更なしでOKだよ！ ---
-# 
 @login_required
 def schedule_new_view(request):
     if request.method == 'POST':
@@ -198,7 +159,6 @@ def schedule_new_view(request):
             schedule.created_by_user = request.user
             schedule.save()
             form.save_m2m()
-            # ここで messages を使うよ！
             messages.success(request, f'予定「{schedule.title}」を登録しました。')
             return redirect(reverse_lazy('calendar_app:monthly_calendar', args=[schedule.start_datetime.year, schedule.start_datetime.month]))
     else:
@@ -215,7 +175,6 @@ def schedule_new_view(request):
 def schedule_detail_view(request, schedule_id):
     schedule = get_object_or_404(Schedule, id=schedule_id)
     if not (schedule.created_by_user == request.user or request.user in schedule.participants.all()):
-        # ここで messages を使うよ！
         messages.error(request, "この予定の詳細を見る権限がありません。")
         return redirect(reverse_lazy('dashboard_top_page'))
     return render(request, 'calendar_app/schedule_detail.html', {'schedule': schedule})
@@ -227,7 +186,6 @@ def schedule_edit_view(request, schedule_id):
         form = ScheduleForm(request.POST, instance=schedule)
         if form.is_valid():
             form.save()
-            # ここで messages を使うよ！
             messages.success(request, f'予定「{schedule.title}」を更新しました。')
             return redirect(reverse_lazy('calendar_app:schedule_detail', args=[schedule.id]))
     else:
@@ -241,52 +199,52 @@ def schedule_delete_view(request, schedule_id):
         title = schedule.title
         year, month = schedule.start_datetime.year, schedule.start_datetime.month
         schedule.delete()
-        # ここで messages を使うよ！
         messages.success(request, f'予定「{title}」を削除しました。')
         return redirect(reverse_lazy('calendar_app:monthly_calendar', args=[year, month]))
     return render(request, 'calendar_app/schedule_delete_confirm.html', {'schedule': schedule})
 
+
+# --- ✨✨ ここからが修正された最終兵器バージョンだよ！ ✨✨ ---
 @login_required
 @require_POST
 def create_personal_schedule_from_ai_view(request):
     try:
         data = json.loads(request.body)
+        print(f"--- [AIからの受信データ] ---: {data}")
 
-        # 必須項目のチェック
-        required_fields = ['title', 'start_datetime', 'end_datetime']
-        if not all(field in data for field in required_fields):
-            return JsonResponse({'status': 'error', 'message': '必須項目が不足しています。'}, status=400)
+        # AIからのデータを元に、フォームで使うための辞書データを作成
+        form_data = {
+            'title': data.get('title'),
+            'start_datetime': data.get('start_datetime'),
+            'end_datetime': data.get('end_datetime'),
+            'location': data.get('location'),
+            'description': data.get('description'),
+        }
         
-        # 日時のパースとバリデーション
-        start_dt_naive = datetime.strptime(data['start_datetime'], '%Y-%m-%d %H:%M')
-        end_dt_naive = datetime.strptime(data['end_datetime'], '%Y-%m-%d %H:%M')
+        # Djangoのフォーム機能を使って、データが正しいか厳しくチェック！
+        form = ScheduleForm(form_data)
 
-        if end_dt_naive <= start_dt_naive:
-            return JsonResponse({'status': 'error', 'message': '終了日時は開始日時より後にする必要があります。'}, status=400)
+        if form.is_valid():
+            # データが正しければ、保存処理に進む
+            with transaction.atomic():
+                schedule = form.save(commit=False)
+                schedule.created_by_user = request.user
+                schedule.save()
+                schedule.participants.add(request.user)
 
-        start_dt_aware = timezone.make_aware(start_dt_naive)
-        end_dt_aware = timezone.make_aware(end_dt_naive)
+            print(f"--- [成功] 予定をデータベースに保存しました！ ID: {schedule.id} ---")
+            return JsonResponse({
+                'status': 'success', 
+                'message': f"予定「{schedule.title}」をカレンダーに登録しました！"
+            })
+        else:
+            # もしデータに不備があったら、エラーの内容を詳しく返す！
+            print(f"--- [エラー] フォームのバリデーションに失敗しました ---: {form.errors.as_json()}")
+            error_message = "AIからのデータに不備がありました: " + " ".join([f"{field}: {' '.join(errors)}" for field, errors in form.errors.items()])
+            return JsonResponse({'status': 'error', 'message': error_message}, status=400)
 
-        # 安全なトランザクション内でスケジュールを作成
-        with transaction.atomic():
-            new_schedule = Schedule.objects.create(
-                created_by_user=request.user,
-                title=data['title'],
-                start_datetime=start_dt_aware,
-                end_datetime=end_dt_aware,
-                location=data.get('location'),
-                description=data.get('description')
-            )
-            # 自分だけの予定なので、participantsには自分だけ追加する
-            new_schedule.participants.add(request.user)
-
-        return JsonResponse({
-            'status': 'success', 
-            'message': f"予定「{new_schedule.title}」をカレンダーに登録しました！"
-        })
-
-    except (ValueError, TypeError):
-        return JsonResponse({'status': 'error', 'message': '日時の形式が正しくありません。'}, status=400)
     except Exception as e:
+        # その他の予期せぬエラーも、ちゃんとログに出す！
+        print(f"--- [致命的エラー] 予期せぬエラーが発生しました ---")
         traceback.print_exc()
-        return JsonResponse({'status': 'error', 'message': '予定の作成中にエラーが発生しました。'}, status=500)
+        return JsonResponse({'status': 'error', 'message': f'予定の作成中に予期せぬエラーが発生しました: {e}'}, status=500)

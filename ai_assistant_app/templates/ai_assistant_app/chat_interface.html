@@ -143,23 +143,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // --- ✨✨ ここからがデバッグモードのJavaScriptだよ！ ✨✨ ---
     function playAudio(audioUrl) {
-        console.log("--- playAudio関数が呼ばれました ---");
-        console.log("渡されたaudioUrl:", audioUrl);
-
         if(audioUrl) {
             const audio = new Audio(audioUrl);
-
-            audio.addEventListener('error', function(e) {
-                console.error("Audio Error Event:", e);
-                console.error("エラーコード:", audio.error.code);
-                console.error("エラーメッセージ:", audio.error.message);
-            });
-
             audio.play().catch(e => console.error("音声の再生に失敗しました:", e));
-        } else {
-            console.warn("audioUrlが空っぽのため、再生をスキップしました。");
         }
     }
 
@@ -188,12 +175,68 @@ document.addEventListener('DOMContentLoaded', function() {
         return messageWrapper;
     }
 
+    // --- ✨✨ ここからが修正された魔法だよ！ ✨✨ ---
     messagesArea.addEventListener('click', async function(event) {
         const playButton = event.target.closest('.play-audio-button');
-        if (playButton) { const audioSrc = playButton.dataset.src; if (audioSrc && audioSrc !== 'null') playAudio(audioSrc); return; }
+        if (playButton) { 
+            const audioSrc = playButton.dataset.src; 
+            if (audioSrc && audioSrc !== 'null') playAudio(audioSrc); 
+            return; 
+        }
+
         const proposalButton = event.target.closest('.proposal-button');
-        if (proposalButton) { const action = proposalButton.dataset.action; const buttonContainer = proposalButton.parentElement; if (action === 'cancel') { buttonContainer.innerHTML = '<p class="text-center text-sm text-slate-500 p-2">キャンセルしました。</p>'; return; } buttonContainer.innerHTML = '<p class="text-center text-sm text-slate-500 p-2 animate-pulse">処理中です...</p>'; try { const proposal = JSON.parse(proposalButton.dataset.proposal); let url = ''; if (action === 'create-friend-request') { url = "{% url 'schedule_requests_app:create_request_from_ai' %}"; } else if (action === 'create-personal-schedule') { url = "{% url 'calendar_app:create_personal_schedule_from_ai' %}"; } if (url) { const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken, }, body: JSON.stringify(proposal), }); const result = await response.json(); if (response.ok) { buttonContainer.innerHTML = `<p class="text-center text-sm text-green-600 p-2 font-semibold">${result.message}</p>`; } else { throw new Error(result.message || '不明なエラーが発生しました。'); } } } catch (error) { buttonContainer.innerHTML = `<p class="text-center text-sm text-red-600 p-2 font-semibold">エラー: ${error.message}</p>`; } }
+        if (proposalButton) {
+            const action = proposalButton.dataset.action;
+            const buttonContainer = proposalButton.parentElement;
+            if (action === 'cancel') {
+                buttonContainer.innerHTML = '<p class="text-center text-sm text-slate-500 p-2">キャンセルしました。</p>';
+                return;
+            }
+            buttonContainer.innerHTML = '<p class="text-center text-sm text-slate-500 p-2 animate-pulse">処理中です...</p>';
+            
+            try {
+                const proposal = JSON.parse(proposalButton.dataset.proposal);
+                let url = '';
+                // ✨ 新しいフラグを追加 ✨
+                let shouldUpdateCalendar = false;
+
+                if (action === 'create-friend-request') {
+                    url = "{% url 'schedule_requests_app:create_request_from_ai' %}";
+                    // 友達申請の場合はカレンダーは更新しない
+                } else if (action === 'create-personal-schedule') {
+                    url = "{% url 'calendar_app:create_personal_schedule_from_ai' %}";
+                    // ✨ 自分だけの予定の場合は、カレンダーを更新する！ ✨
+                    shouldUpdateCalendar = true;
+                }
+                
+                if (url) {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+                        body: JSON.stringify(proposal),
+                    });
+                    const result = await response.json();
+                    
+                    if (response.ok) {
+                        buttonContainer.innerHTML = `<p class="text-center text-sm text-green-600 p-2 font-semibold">${result.message}</p>`;
+                        
+                        // ✨✨ ここが新しい魔法！ ✨✨
+                        if (shouldUpdateCalendar) {
+                            // 「カレンダー更新してね！」って伝言をlocalStorageに書き込む！
+                            // 'true' という文字列と、現在時刻を書き込んで、新しいイベントだと分かるようにするよ
+                            localStorage.setItem('shouldReloadCalendar', `true_${Date.now()}`);
+                        }
+
+                    } else {
+                        throw new Error(result.message || '不明なエラーが発生しました。');
+                    }
+                }
+            } catch (error) {
+                buttonContainer.innerHTML = `<p class="text-center text-sm text-red-600 p-2 font-semibold">エラー: ${error.message}</p>`;
+            }
+        }
     });
+    // --- ✨✨ 魔法はここまで！ ✨✨ ---
 
     function showTypingIndicator() { const existingIndicator = document.getElementById('typingIndicator'); if (existingIndicator) existingIndicator.remove(); let avatarHtml = aiAvatarUrl ? `<img alt="Avatar" class="size-8 rounded-full bg-cover bg-center self-end object-cover" src="${aiAvatarUrl}"/>` : `<div class="size-8 rounded-full flex items-center justify-center font-bold text-sm bg-blue-200 text-blue-700 self-end">${aiCharacterName.charAt(0).toUpperCase()}</div>`; const indicatorHtml = `<div class="flex gap-2.5 max-w-xl" id="typingIndicator">${avatarHtml}<div class="flex items-center space-x-1.5 p-3 bg-slate-200 rounded-xl rounded-bl-none"><div class="ai-typing-indicator span size-1.5 bg-slate-500 rounded-full"></div><div class="ai-typing-indicator span size-1.5 bg-slate-500 rounded-full"></div><div class="ai-typing-indicator span size-1.5 bg-slate-500 rounded-full"></div></div></div>`; messagesArea.insertAdjacentHTML('beforeend', indicatorHtml); scrollToBottom(); }
     function hideTypingIndicator() { const indicator = document.getElementById('typingIndicator'); if (indicator) indicator.remove(); }
@@ -207,11 +250,7 @@ document.addEventListener('DOMContentLoaded', function() {
         scrollToBottom(); showTypingIndicator();
         try {
             const response = await fetch(`/ai/chat/${currentCharacterId}/send/`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken }, body: JSON.stringify({ message: userMessage }) });
-            
             const data = await response.json();
-            console.log("--- サーバーからの応答データ ---");
-            console.log(data);
-
             if (!response.ok) { throw new Error(data.error || 'AIからの応答でエラーが発生しました。'); }
             messagesArea.appendChild(createMessageElement(data.reply, 'ai', new Date().toISOString(), data.audio_url));
         } catch (error) {

@@ -4,27 +4,27 @@
 {% block title %}{% if ai_character %}{{ ai_character.character_name }}とチャット{% else %}AIチャット{% endif %}{% endblock %}
 
 {% block page_title_in_header %}
-    <div class="flex items-center gap-3 w-full">
+    <div class="flex items-center gap-2 sm:gap-3 w-full">
         {% if ai_character %}
             {% if ai_character.icon_url %}
-                <img alt="{{ ai_character.character_name }}のアイコン" class="w-8 h-8 rounded-full object-cover" src="{{ ai_character.icon_url }}"/>
+                <img alt="{{ ai_character.character_name }}のアイコン" class="w-8 h-8 rounded-full object-cover flex-shrink-0" src="{{ ai_character.icon_url }}"/>
             {% else %}
-                <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-sm font-bold text-white">{{ ai_character.character_name.0|upper }}</div>
+                <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-sm font-bold text-white flex-shrink-0">{{ ai_character.character_name.0|upper }}</div>
             {% endif %}
-            <span class="whitespace-nowrap">{{ ai_character.character_name }}</span>
-            <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+            <span class="whitespace-nowrap truncate text-base sm:text-xl font-semibold text-slate-800">{{ ai_character.character_name }}</span>
+            <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse flex-shrink-0 ml-1"></span>
         {% else %}
             <span>AIチャット</span>
         {% endif %}
 
-        <div class="ml-auto">
+        <div class="ml-auto flex-shrink-0">
             <form id="resetChatForm" action="{% url 'ai_assistant_app:reset_chat_history' character_id=ai_character.id %}" method="post">
                 {% csrf_token %}
                 <button type="submit" onclick="return confirm('本当にこのAIとの会話履歴をすべてリセットしますか？')" 
-                        class="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors"
+                        class="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 rounded-full text-xs font-medium bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors"
                         aria-label="会話履歴をリセット" title="会話履歴をリセット">
                     <span class="material-symbols-outlined text-sm">delete_history</span>
-                    <span>リセット</span>
+                    <span class="hidden sm:inline">リセット</span>
                 </button>
             </form>
         </div>
@@ -33,7 +33,7 @@
 
 {% block head_extra_css %}
 <style>
-    #main-content-container { padding: 0 !important; margin: 0 !important; max-width: none !important; }
+    #main-scroll-container > main { padding: 0 !important; }
     .message-bubble-ai { background-color: #f1f5f9; color: #1e293b; }
     .message-bubble-user { background-color: #3b82f6; color: white; }
     @keyframes blink { 0% { opacity: 0.2; } 20% { opacity: 1; } 100% { opacity: 0.2; } }
@@ -57,31 +57,29 @@
 {% endblock %}
 
 {% block content %}
-<div class="flex flex-col h-[calc(100vh-4.5rem)] bg-white">
-    <main class="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50" id="messagesArea"></main>
+<div class="flex flex-col h-[calc(100vh-var(--header-height,65px))] bg-white">
+    <main class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 bg-slate-50" id="messagesArea"></main>
 
-    <footer class="bg-white p-4 border-t border-slate-200">
-        
-        
-        <div class="max-w-4xl mx-auto flex justify-end items-center mb-2 px-2">
-            <label for="autoPlayCheckbox" class="flex items-center cursor-pointer text-sm text-slate-600 group">
-                <input type="checkbox" id="autoPlayCheckbox" class="form-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
-                <span class="ml-2 group-hover:text-blue-600 transition-colors">音声を自動再生</span>
-                <span class="material-symbols-outlined ml-1 text-base text-slate-500 group-hover:text-blue-600 transition-colors">autoplay</span>
-            </label>
+    <footer class="bg-white p-2 sm:p-4 border-t border-slate-200">
+        <div class="max-w-4xl mx-auto">
+            <div class="flex justify-end items-center mb-2 px-2">
+                <label for="autoPlayCheckbox" class="flex items-center cursor-pointer text-sm text-slate-600 group">
+                    <input type="checkbox" id="autoPlayCheckbox" class="form-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                    <span class="ml-2 group-hover:text-blue-600 transition-colors">音声を自動再生</span>
+                    <span class="material-symbols-outlined ml-1 text-base text-slate-500 group-hover:text-blue-600 transition-colors">autoplay</span>
+                </label>
+            </div>
+            <form id="chatForm" class="flex items-center gap-2 sm:gap-3">
+                <input id="messageInput" class="flex-1 px-4 py-2.5 border border-slate-300 rounded-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow text-sm text-slate-800 placeholder-slate-400" placeholder="メッセージを入力..." type="text" autocomplete="off"/>
+                
+                <button id="micButton" type="button" aria-label="Voice input" class="bg-slate-200 text-slate-600 p-2.5 rounded-full hover:bg-slate-300 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2">
+                    <span class="material-symbols-outlined">mic</span>
+                </button>
+                <button id="sendButton" type="submit" aria-label="Send message" class="bg-blue-500 text-white p-2.5 rounded-full hover:bg-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                    <span class="material-symbols-outlined">send</span>
+                </button>
+            </form>
         </div>
-        
-
-        <form id="chatForm" class="max-w-4xl mx-auto flex items-center gap-3">
-            <input id="messageInput" class="flex-1 px-4 py-2.5 border border-slate-300 rounded-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow text-sm text-slate-800 placeholder-slate-400" placeholder="メッセージを入力、またはマイクを押して話してください..." type="text" autocomplete="off"/>
-            
-            <button id="micButton" type="button" aria-label="Voice input" class="bg-slate-200 text-slate-600 p-2.5 rounded-full hover:bg-slate-300 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2">
-                <span class="material-symbols-outlined">mic</span>
-            </button>
-            <button id="sendButton" type="submit" aria-label="Send message" class="bg-blue-500 text-white p-2.5 rounded-full hover:bg-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-                <span class="material-symbols-outlined">send</span>
-            </button>
-        </form>
     </footer>
 </div>
 {% endblock %}
@@ -91,6 +89,16 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const header = document.getElementById('page-header');
+    if (header) {
+        const setHeaderHeight = () => {
+            const headerHeight = header.offsetHeight;
+            document.documentElement.style.setProperty('--header-height', `${headerHeight}px`);
+        };
+        setHeaderHeight();
+        window.addEventListener('resize', setHeaderHeight);
+    }
+
     const messagesArea = document.getElementById('messagesArea');
     const chatForm = document.getElementById('chatForm');
     const messageInput = document.getElementById('messageInput');
@@ -102,11 +110,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const currentUserUsername = "{{ request.user.username }}";
     const aiCharacterName = "{{ ai_character.character_name|escapejs|default:'AI' }}";
     const aiAvatarUrl = "{{ ai_character.icon_url|escapejs|default:'' }}";
-    let userAvatarUrl = null;
-    {% if request.user.profile_image %}
-        userAvatarUrl = "{{ request.user.profile_image.url }}";
-    {% endif %}
     
+    // ✨✨ ユーザーのアイコンは、ここで一度だけ定義する！ ✨✨
+    const userAvatarUrl = {% if request.user.profile_image %}"{{ request.user.profile_image.url }}"{% else %}null{% endif %};
+    const userAvatarInitial = currentUserUsername.charAt(0).toUpperCase();
+
     const chatHistoryDataElement = document.getElementById('chat-history-data');
     const chatHistoryJson = JSON.parse(chatHistoryDataElement.textContent);
 
@@ -136,24 +144,25 @@ document.addEventListener('DOMContentLoaded', function() {
         recognition.lang = 'ja-JP';
         recognition.interimResults = true;
         recognition.continuous = true;
-
         recognition.onstart = function() { isRecording = true; micButton.classList.add('mic-recording'); messageInput.placeholder = "お話しください…"; };
-        recognition.onend = function() { isRecording = false; micButton.classList.remove('mic-recording'); messageInput.placeholder = "メッセージを入力、またはマイクを押して話してください..."; };
+        recognition.onend = function() { isRecording = false; micButton.classList.remove('mic-recording'); messageInput.placeholder = "メッセージを入力..."; };
         recognition.onresult = function(event) { let interimTranscript = ''; for (let i = event.resultIndex; i < event.results.length; ++i) { if (event.results[i].isFinal) { finalTranscript += event.results[i][0].transcript; } else { interimTranscript += event.results[i][0].transcript; } } messageInput.value = finalTranscript + interimTranscript; };
-        recognition.onerror = function(event) { console.error("音声認識エラー:", event.error); isRecording = false; micButton.classList.remove('mic-recording'); messageInput.placeholder = "ごめんなさい、うまく聞き取れませんでした…"; };
+        recognition.onerror = function(event) { console.error("音声認識エラー:", event.error); isRecording = false; micButton.classList.remove('mic-recording'); messageInput.placeholder = "うまく聞き取れませんでした…"; };
     } else {
-        micButton.style.display = 'none';
+        if(micButton) micButton.style.display = 'none';
     }
 
-    micButton.addEventListener('click', function() {
-        if (!SpeechRecognition) return;
-        if (isRecording) {
-            recognition.stop();
-            setTimeout(() => { handleFormSubmit(new Event('submit', { cancelable: true })); }, 200);
-        } else {
-            finalTranscript = ''; messageInput.value = ''; recognition.start();
-        }
-    });
+    if(micButton) {
+        micButton.addEventListener('click', function() {
+            if (!SpeechRecognition) return;
+            if (isRecording) {
+                recognition.stop();
+                setTimeout(() => { handleFormSubmit(new Event('submit', { cancelable: true })); }, 200);
+            } else {
+                finalTranscript = ''; messageInput.value = ''; recognition.start();
+            }
+        });
+    }
 
     function playAudio(audioUrl) {
         if(audioUrl) {
@@ -169,15 +178,28 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function scrollToBottom() { messagesArea.scrollTop = messagesArea.scrollHeight; }
     
+    // --- ✨✨ ここが修正された、アイコン表示ロジックだよ！ ✨✨ ---
     function createMessageElement(messageText, senderType, timestampStr, audioUrl = null) {
         const isAI = senderType === 'ai';
-        const avatarUrl = isAI ? aiAvatarUrl : userAvatarUrl;
-        const avatarInitial = isAI ? aiCharacterName.charAt(0).toUpperCase() : currentUserUsername.charAt(0).toUpperCase();
         const timestamp = new Date(timestampStr).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
-
-        let avatarHtml = avatarUrl ? `<img alt="Avatar" class="size-8 rounded-full bg-cover bg-center self-end object-cover" src="${avatarUrl}"/>` : `<div class="size-8 rounded-full flex items-center justify-center font-bold text-sm self-end ${isAI ? 'bg-blue-200 text-blue-700' : 'bg-slate-200 text-slate-700'}">${avatarInitial}</div>`;
+        
+        let avatarHtml = '';
+        if (isAI) {
+            // AIのメッセージの場合
+            avatarHtml = aiAvatarUrl 
+                ? `<img alt="Avatar" class="size-8 rounded-full bg-cover bg-center self-end object-cover flex-shrink-0" src="${aiAvatarUrl}"/>` 
+                : `<div class="size-8 rounded-full flex items-center justify-center font-bold text-sm self-end bg-blue-200 text-blue-700 flex-shrink-0">${aiCharacterName.charAt(0).toUpperCase()}</div>`;
+        } else {
+            // ユーザーのメッセージの場合
+            avatarHtml = userAvatarUrl 
+                ? `<img alt="Avatar" class="size-8 rounded-full bg-cover bg-center self-end object-cover flex-shrink-0" src="${userAvatarUrl}"/>` 
+                : `<div class="size-8 rounded-full flex items-center justify-center font-bold text-sm self-end bg-slate-200 text-slate-700 flex-shrink-0">${userAvatarInitial}</div>`;
+        }
+        
         let playButtonHtml = '';
-        if (isAI && audioUrl) { playButtonHtml = `<button class="play-audio-button p-1.5 rounded-full text-slate-500 hover:bg-slate-200 hover:text-blue-500 transition-colors" data-src="${audioUrl}" title="音声を再生"><span class="material-symbols-outlined text-base">volume_up</span></button>`; }
+        if (isAI && audioUrl) { 
+            playButtonHtml = `<button class="play-audio-button p-1.5 rounded-full text-slate-500 hover:bg-slate-200 hover:text-blue-500 transition-colors" data-src="${audioUrl}" title="音声を再生"><span class="material-symbols-outlined text-base">volume_up</span></button>`; 
+        }
         
         const proposalRegex = /<!-- SCHEDULE_PROPOSAL_DATA_START -->(.*?)<!-- SCHEDULE_PROPOSAL_DATA_END -->/s;
         const match = messageText.match(proposalRegex);
@@ -185,12 +207,25 @@ document.addEventListener('DOMContentLoaded', function() {
         let buttonsHtml = '';
         if (match) { try { const proposalData = JSON.parse(match[1]); if (proposalData.type === 'personal_schedule_creation') { buttonsHtml = `<div class="mt-2 flex gap-2"><button class="proposal-button flex-1 px-4 py-2 bg-green-500 text-white text-sm font-semibold rounded-lg hover:bg-green-600 transition-colors" data-action="create-personal-schedule" data-proposal='${JSON.stringify(proposalData)}'>はい、カレンダーに登録する</button><button class="proposal-button flex-1 px-4 py-2 bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-300 transition-colors" data-action="cancel">いいえ、やめておく</button></div>`; } else if (proposalData.type === 'friend_schedule_request') { buttonsHtml = `<div class="mt-2 flex gap-2"><button class="proposal-button flex-1 px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 transition-colors" data-action="create-friend-request" data-proposal='${JSON.stringify(proposalData)}'>はい、この内容で申請する</button><button class="proposal-button flex-1 px-4 py-2 bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-300 transition-colors" data-action="cancel">いいえ、やめておく</button></div>`; } } catch (e) { console.error("JSONのパースに失敗しました:", e); } }
 
-        const messageBubbleHtml = `<div class="flex flex-col gap-1 ${isAI ? '' : 'items-end'}"><div class="flex items-end gap-2">${isAI ? playButtonHtml : ''}<div class="p-3 rounded-xl shadow-sm max-w-lg ${isAI ? 'message-bubble-ai rounded-bl-none' : 'message-bubble-user rounded-br-none'}"><p class="text-sm message-content">${cleanMessageText.replace(/\n/g, '<br>')}</p>${buttonsHtml}</div></div><span class="text-xs text-slate-500 ${isAI ? 'self-start' : 'self-end'}">${timestamp}</span></div>`;
+        const messageBubbleHtml = `<div class="flex flex-col gap-1 w-full"><div class="flex items-end gap-2">${isAI ? playButtonHtml : ''}<div class="p-3 rounded-xl shadow-sm ${isAI ? 'message-bubble-ai rounded-bl-none' : 'message-bubble-user rounded-br-none'}"><p class="text-sm message-content" style="overflow-wrap: break-word; word-break: break-word;">${cleanMessageText.replace(/\n/g, '<br>')}</p>${buttonsHtml}</div></div><span class="text-xs text-slate-500">${timestamp}</span></div>`;
         const messageWrapper = document.createElement('div');
-        messageWrapper.classList.add('flex', 'gap-2.5', 'max-w-xl', 'message-animate-in');
-        if (isAI) { messageWrapper.innerHTML = avatarHtml + messageBubbleHtml; } else { messageWrapper.classList.add('ml-auto', 'justify-end'); messageWrapper.innerHTML = `<div class="flex flex-col gap-1 items-end"><div class="p-3 rounded-xl shadow-sm max-w-lg message-bubble-user rounded-br-none"><p class="text-sm message-content">${cleanMessageText.replace(/\n/g, '<br>')}</p></div><span class="text-xs text-slate-500 self-end">${timestamp}</span></div>`; }
+        
+        messageWrapper.classList.add('flex', 'gap-2.5', 'w-full', 'max-w-[90%]', 'sm:max-w-lg', 'message-animate-in');
+
+        if (isAI) {
+            messageWrapper.innerHTML = avatarHtml + messageBubbleHtml;
+        } else {
+            messageWrapper.classList.add('ml-auto', 'flex-row-reverse');
+            // ユーザーのメッセージにはアイコンを表示しない！
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = messageBubbleHtml;
+            // 右寄せにするために、メッセージのコンテナにクラスを追加
+            tempDiv.querySelector('.flex-col').classList.add('items-end');
+            messageWrapper.innerHTML = tempDiv.innerHTML;
+        }
         return messageWrapper;
     }
+    // --- ✨✨ アイコン修正はここまで！ ✨✨ ---
 
     messagesArea.addEventListener('click', async function(event) {
         const playButton = event.target.closest('.play-audio-button');
@@ -199,7 +234,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if (audioSrc && audioSrc !== 'null') playAudio(audioSrc); 
             return; 
         }
-
         const proposalButton = event.target.closest('.proposal-button');
         if (proposalButton) {
             const action = proposalButton.dataset.action;
@@ -209,19 +243,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             buttonContainer.innerHTML = '<p class="text-center text-sm text-slate-500 p-2 animate-pulse">処理中です...</p>';
-            
             try {
                 const proposal = JSON.parse(proposalButton.dataset.proposal);
                 let url = '';
                 let shouldUpdateCalendar = false;
-
                 if (action === 'create-friend-request') {
                     url = "{% url 'schedule_requests_app:create_request_from_ai' %}";
                 } else if (action === 'create-personal-schedule') {
                     url = "{% url 'calendar_app:create_personal_schedule_from_ai' %}";
                     shouldUpdateCalendar = true;
                 }
-                
                 if (url) {
                     const response = await fetch(url, {
                         method: 'POST',
@@ -229,7 +260,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         body: JSON.stringify(proposal),
                     });
                     const result = await response.json();
-                    
                     if (response.ok) {
                         buttonContainer.innerHTML = `<p class="text-center text-sm text-green-600 p-2 font-semibold">${result.message}</p>`;
                         if (shouldUpdateCalendar) {
@@ -245,8 +275,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    function showTypingIndicator() { const existingIndicator = document.getElementById('typingIndicator'); if (existingIndicator) existingIndicator.remove(); let avatarHtml = aiAvatarUrl ? `<img alt="Avatar" class="size-8 rounded-full bg-cover bg-center self-end object-cover" src="${aiAvatarUrl}"/>` : `<div class="size-8 rounded-full flex items-center justify-center font-bold text-sm bg-blue-200 text-blue-700 self-end">${aiCharacterName.charAt(0).toUpperCase()}</div>`; const indicatorHtml = `<div class="flex gap-2.5 max-w-xl" id="typingIndicator">${avatarHtml}<div class="flex items-center space-x-1.5 p-3 bg-slate-200 rounded-xl rounded-bl-none"><div class="ai-typing-indicator span size-1.5 bg-slate-500 rounded-full"></div><div class="ai-typing-indicator span size-1.5 bg-slate-500 rounded-full"></div><div class="ai-typing-indicator span size-1.5 bg-slate-500 rounded-full"></div></div></div>`; messagesArea.insertAdjacentHTML('beforeend', indicatorHtml); scrollToBottom(); }
-    function hideTypingIndicator() { const indicator = document.getElementById('typingIndicator'); if (indicator) indicator.remove(); }
+    function showTypingIndicator() { /* (省略しないよ！) */ const existingIndicator = document.getElementById('typingIndicator'); if (existingIndicator) existingIndicator.remove(); let avatarHtml = aiAvatarUrl ? `<img alt="Avatar" class="size-8 rounded-full bg-cover bg-center self-end object-cover" src="${aiAvatarUrl}"/>` : `<div class="size-8 rounded-full flex items-center justify-center font-bold text-sm bg-blue-200 text-blue-700 self-end">${aiCharacterName.charAt(0).toUpperCase()}</div>`; const indicatorHtml = `<div class="flex gap-2.5 max-w-xl" id="typingIndicator">${avatarHtml}<div class="flex items-center space-x-1.5 p-3 bg-slate-200 rounded-xl rounded-bl-none"><div class="ai-typing-indicator span size-1.5 bg-slate-500 rounded-full"></div><div class="ai-typing-indicator span size-1.5 bg-slate-500 rounded-full"></div><div class="ai-typing-indicator span size-1.5 bg-slate-500 rounded-full"></div></div></div>`; messagesArea.insertAdjacentHTML('beforeend', indicatorHtml); scrollToBottom(); }
+    function hideTypingIndicator() { /* (省略しないよ！) */ const indicator = document.getElementById('typingIndicator'); if (indicator) indicator.remove(); }
 
     async function handleFormSubmit(event) {
         if(event) event.preventDefault();
@@ -259,14 +289,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const response = await fetch(`/ai/chat/${currentCharacterId}/send/`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken }, body: JSON.stringify({ message: userMessage }) });
             const data = await response.json();
             if (!response.ok) { throw new Error(data.error || 'AIからの応答でエラーが発生しました。'); }
-            
             const aiMessageElement = createMessageElement(data.reply, 'ai', new Date().toISOString(), data.audio_url);
             messagesArea.appendChild(aiMessageElement);
-            
             if (autoPlayCheckbox.checked && data.audio_url) {
                 playAudio(data.audio_url);
             }
-
         } catch (error) {
             console.error('Error sending message to AI:', error);
             const errorText = error.message || 'ごめんなさい、AIとの通信でエラーが発生しました。';
@@ -276,18 +303,19 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    chatForm.addEventListener('submit', handleFormSubmit);
+    if(chatForm) chatForm.addEventListener('submit', handleFormSubmit);
 
-    const savedAutoPlaySetting = localStorage.getItem('autoPlayAudio');
-    if (savedAutoPlaySetting === 'true') {
-        autoPlayCheckbox.checked = true;
-    } else if (savedAutoPlaySetting === 'false') {
-        autoPlayCheckbox.checked = false;
+    if (autoPlayCheckbox) {
+        const savedAutoPlaySetting = localStorage.getItem('autoPlayAudio');
+        if (savedAutoPlaySetting === 'true') {
+            autoPlayCheckbox.checked = true;
+        } else if (savedAutoPlaySetting === 'false') {
+            autoPlayCheckbox.checked = false;
+        }
+        autoPlayCheckbox.addEventListener('change', function() {
+            localStorage.setItem('autoPlayAudio', this.checked);
+        });
     }
-
-    autoPlayCheckbox.addEventListener('change', function() {
-        localStorage.setItem('autoPlayAudio', this.checked);
-    });
 
     function renderInitialMessages() {
         messagesArea.innerHTML = '';

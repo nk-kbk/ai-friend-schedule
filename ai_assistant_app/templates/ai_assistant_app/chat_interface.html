@@ -61,6 +61,17 @@
     <main class="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50" id="messagesArea"></main>
 
     <footer class="bg-white p-4 border-t border-slate-200">
+        
+        
+        <div class="max-w-4xl mx-auto flex justify-end items-center mb-2 px-2">
+            <label for="autoPlayCheckbox" class="flex items-center cursor-pointer text-sm text-slate-600 group">
+                <input type="checkbox" id="autoPlayCheckbox" class="form-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                <span class="ml-2 group-hover:text-blue-600 transition-colors">音声を自動再生</span>
+                <span class="material-symbols-outlined ml-1 text-base text-slate-500 group-hover:text-blue-600 transition-colors">autoplay</span>
+            </label>
+        </div>
+        
+
         <form id="chatForm" class="max-w-4xl mx-auto flex items-center gap-3">
             <input id="messageInput" class="flex-1 px-4 py-2.5 border border-slate-300 rounded-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow text-sm text-slate-800 placeholder-slate-400" placeholder="メッセージを入力、またはマイクを押して話してください..." type="text" autocomplete="off"/>
             
@@ -85,6 +96,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const messageInput = document.getElementById('messageInput');
     const sendButton = document.getElementById('sendButton');
     const micButton = document.getElementById('micButton');
+    const autoPlayCheckbox = document.getElementById('autoPlayCheckbox');
     
     const currentCharacterId = "{{ ai_character.id|default:'' }}";
     const currentUserUsername = "{{ request.user.username }}";
@@ -146,7 +158,12 @@ document.addEventListener('DOMContentLoaded', function() {
     function playAudio(audioUrl) {
         if(audioUrl) {
             const audio = new Audio(audioUrl);
-            audio.play().catch(e => console.error("音声の再生に失敗しました:", e));
+            const playPromise = audio.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(error => {
+                    console.warn("音声の自動再生がブラウザにブロックされました。ユーザーの操作が必要です。");
+                });
+            }
         }
     }
 
@@ -175,7 +192,6 @@ document.addEventListener('DOMContentLoaded', function() {
         return messageWrapper;
     }
 
-    // --- ✨✨ ここからが修正された魔法だよ！ ✨✨ ---
     messagesArea.addEventListener('click', async function(event) {
         const playButton = event.target.closest('.play-audio-button');
         if (playButton) { 
@@ -197,15 +213,12 @@ document.addEventListener('DOMContentLoaded', function() {
             try {
                 const proposal = JSON.parse(proposalButton.dataset.proposal);
                 let url = '';
-                // ✨ 新しいフラグを追加 ✨
                 let shouldUpdateCalendar = false;
 
                 if (action === 'create-friend-request') {
                     url = "{% url 'schedule_requests_app:create_request_from_ai' %}";
-                    // 友達申請の場合はカレンダーは更新しない
                 } else if (action === 'create-personal-schedule') {
                     url = "{% url 'calendar_app:create_personal_schedule_from_ai' %}";
-                    // ✨ 自分だけの予定の場合は、カレンダーを更新する！ ✨
                     shouldUpdateCalendar = true;
                 }
                 
@@ -219,14 +232,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     if (response.ok) {
                         buttonContainer.innerHTML = `<p class="text-center text-sm text-green-600 p-2 font-semibold">${result.message}</p>`;
-                        
-                        // ✨✨ ここが新しい魔法！ ✨✨
                         if (shouldUpdateCalendar) {
-                            // 「カレンダー更新してね！」って伝言をlocalStorageに書き込む！
-                            // 'true' という文字列と、現在時刻を書き込んで、新しいイベントだと分かるようにするよ
                             localStorage.setItem('shouldReloadCalendar', `true_${Date.now()}`);
                         }
-
                     } else {
                         throw new Error(result.message || '不明なエラーが発生しました。');
                     }
@@ -236,7 +244,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
-    // --- ✨✨ 魔法はここまで！ ✨✨ ---
 
     function showTypingIndicator() { const existingIndicator = document.getElementById('typingIndicator'); if (existingIndicator) existingIndicator.remove(); let avatarHtml = aiAvatarUrl ? `<img alt="Avatar" class="size-8 rounded-full bg-cover bg-center self-end object-cover" src="${aiAvatarUrl}"/>` : `<div class="size-8 rounded-full flex items-center justify-center font-bold text-sm bg-blue-200 text-blue-700 self-end">${aiCharacterName.charAt(0).toUpperCase()}</div>`; const indicatorHtml = `<div class="flex gap-2.5 max-w-xl" id="typingIndicator">${avatarHtml}<div class="flex items-center space-x-1.5 p-3 bg-slate-200 rounded-xl rounded-bl-none"><div class="ai-typing-indicator span size-1.5 bg-slate-500 rounded-full"></div><div class="ai-typing-indicator span size-1.5 bg-slate-500 rounded-full"></div><div class="ai-typing-indicator span size-1.5 bg-slate-500 rounded-full"></div></div></div>`; messagesArea.insertAdjacentHTML('beforeend', indicatorHtml); scrollToBottom(); }
     function hideTypingIndicator() { const indicator = document.getElementById('typingIndicator'); if (indicator) indicator.remove(); }
@@ -252,7 +259,14 @@ document.addEventListener('DOMContentLoaded', function() {
             const response = await fetch(`/ai/chat/${currentCharacterId}/send/`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken }, body: JSON.stringify({ message: userMessage }) });
             const data = await response.json();
             if (!response.ok) { throw new Error(data.error || 'AIからの応答でエラーが発生しました。'); }
-            messagesArea.appendChild(createMessageElement(data.reply, 'ai', new Date().toISOString(), data.audio_url));
+            
+            const aiMessageElement = createMessageElement(data.reply, 'ai', new Date().toISOString(), data.audio_url);
+            messagesArea.appendChild(aiMessageElement);
+            
+            if (autoPlayCheckbox.checked && data.audio_url) {
+                playAudio(data.audio_url);
+            }
+
         } catch (error) {
             console.error('Error sending message to AI:', error);
             const errorText = error.message || 'ごめんなさい、AIとの通信でエラーが発生しました。';
@@ -264,7 +278,29 @@ document.addEventListener('DOMContentLoaded', function() {
     
     chatForm.addEventListener('submit', handleFormSubmit);
 
-    function renderInitialMessages() { messagesArea.innerHTML = ''; if (chatHistoryJson.length === 0 && currentCharacterId) { const initialAiMessage = `こんにちは、${currentUserUsername}さん！ ${aiCharacterName}だよ。どんなお話をしようか？😊`; messagesArea.appendChild(createMessageElement(initialAiMessage, 'ai', new Date().toISOString(), null)); } else { chatHistoryJson.forEach(entry => { messagesArea.appendChild(createMessageElement(entry.message_text, entry.sender_type, entry.timestamp, null)); }); } setTimeout(scrollToBottom, 100); }
+    const savedAutoPlaySetting = localStorage.getItem('autoPlayAudio');
+    if (savedAutoPlaySetting === 'true') {
+        autoPlayCheckbox.checked = true;
+    } else if (savedAutoPlaySetting === 'false') {
+        autoPlayCheckbox.checked = false;
+    }
+
+    autoPlayCheckbox.addEventListener('change', function() {
+        localStorage.setItem('autoPlayAudio', this.checked);
+    });
+
+    function renderInitialMessages() {
+        messagesArea.innerHTML = '';
+        if (chatHistoryJson.length === 0 && currentCharacterId) {
+            const initialAiMessage = `こんにちは、${currentUserUsername}さん！ ${aiCharacterName}だよ。どんなお話をしようか？😊`;
+            messagesArea.appendChild(createMessageElement(initialAiMessage, 'ai', new Date().toISOString(), null));
+        } else {
+            chatHistoryJson.forEach(entry => {
+                messagesArea.appendChild(createMessageElement(entry.message_text, entry.sender_type, entry.timestamp, null));
+            });
+        }
+        setTimeout(scrollToBottom, 100);
+    }
     renderInitialMessages();
 });
 </script>
